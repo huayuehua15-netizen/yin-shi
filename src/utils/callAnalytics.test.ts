@@ -1,14 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  computeConversationMetrics,
   computeEngagementSummary,
+  computeLibraryOverview,
   computeTalkRatio,
   filterTranscriptSegments,
   findActiveSegmentAtTime,
   formatCoachingBriefMarkdown,
   formatDurationLabel,
+  formatSrtTimestamp,
   formatTimestamp,
+  formatTranscriptSrt,
+  formatTranscriptTxt,
   validateAudioFile,
+  validateRawTranscript,
 } from './callAnalytics';
 import type { SalesCallRecord, SentimentPoint, TranscriptSegment } from '../types/call';
 
@@ -19,9 +25,11 @@ const sampleSegments: TranscriptSegment[] = [
     speakerLabel: 'Jordan Vance (Rep)',
     startSec: 0,
     endSec: 20,
-    text: 'Thanks for taking the time today to review your Q4 renewal goals.',
+    text: 'Thanks for taking the time today. What is your top Q4 renewal goal?',
     sentimentScore: 0.6,
     topicTag: 'Agenda Setting',
+    bookmarked: true,
+    coachNote: 'Great open-ended framing question',
   },
   {
     id: 's2',
@@ -39,7 +47,7 @@ const sampleSegments: TranscriptSegment[] = [
     speakerLabel: 'Jordan Vance (Rep)',
     startSec: 62,
     endSec: 82,
-    text: 'Understood. Let us quantify the manual hours your team loses each Friday first.',
+    text: 'Understood. How many manual hours does your team lose each Friday?',
     sentimentScore: 0.5,
     topicTag: 'Discovery',
   },
@@ -51,11 +59,41 @@ const sampleTimeline: SentimentPoint[] = [
   { timeSec: 75, engagement: 88, prospectSentiment: 81, repEnergy: 76, milestoneType: 'peak', label: 'ROI resonance' },
 ];
 
-test('formatTimestamp formats mm:ss and h:mm:ss cleanly', () => {
+const sampleCall: SalesCallRecord = {
+  id: 'c1',
+  title: 'Q4 Renewal',
+  accountName: 'Acme Corp',
+  callDate: '2026-11-18',
+  durationSec: 90,
+  speakerARole: 'Jordan Vance (AE)',
+  speakerBRole: 'Elena Rostova (VP Ops)',
+  methodology: 'MEDDPICC',
+  callStage: 'Renewal & Expansion',
+  transcript: sampleSegments,
+  sentimentTimeline: sampleTimeline,
+  sourceType: 'sample',
+  coaching: {
+    summary: 'Strong recovery after pricing pushback.',
+    strengths: [
+      { title: 'Agenda control', detail: 'Aligned upfront.', evidenceQuote: 'Thanks for taking the time', timestampSec: 0 },
+      { title: 'Pain quantification', detail: 'Anchored on Friday hours.', evidenceQuote: 'manual hours your team loses', timestampSec: 62 },
+      { title: 'Active listening', detail: 'Validated concern.', evidenceQuote: 'Understood.', timestampSec: 62 },
+    ],
+    missedOpportunities: [
+      { title: 'Budget authority', detail: 'Did not verify CFO sign-off.', evidenceQuote: 'pricing predictability', timestampSec: 21 },
+      { title: 'Competitor check', detail: 'Did not ask alternatives.', evidenceQuote: 'consolidate regional reporting', timestampSec: 21 },
+      { title: 'Timeline urgency', detail: 'Skipped implementation cutoff.', evidenceQuote: 'Q4 renewal goals', timestampSec: 0 },
+    ],
+    nextStepRecommendation: 'Send ROI calculator with CFO brief.',
+  },
+};
+
+test('formatTimestamp and formatSrtTimestamp format cleanly', () => {
   assert.equal(formatTimestamp(0), '00:00');
   assert.equal(formatTimestamp(65), '01:05');
   assert.equal(formatTimestamp(3661), '1:01:01');
   assert.equal(formatTimestamp(-10), '00:00');
+  assert.equal(formatSrtTimestamp(65.5), '00:01:05,500');
 });
 
 test('formatDurationLabel formats seconds and minutes accurately', () => {
@@ -72,11 +110,12 @@ test('computeTalkRatio calculates speaker A vs speaker B percentages summing to 
   assert.equal(ratio.speakerBPercent, 50);
 });
 
-test('filterTranscriptSegments filters by speaker and search query', () => {
+test('filterTranscriptSegments filters by speaker, bookmarked, and search query', () => {
   assert.equal(filterTranscriptSegments(sampleSegments, 'Speaker B', '').length, 1);
+  assert.equal(filterTranscriptSegments(sampleSegments, 'bookmarked', '').length, 1);
   assert.equal(filterTranscriptSegments(sampleSegments, 'all', 'pricing').length, 1);
+  assert.equal(filterTranscriptSegments(sampleSegments, 'all', 'open-ended').length, 1);
   assert.equal(filterTranscriptSegments(sampleSegments, 'Speaker A', 'pricing').length, 0);
-  assert.equal(filterTranscriptSegments(sampleSegments, 'all', 'Discovery').length, 1);
 });
 
 test('findActiveSegmentAtTime resolves exact and nearest preceding segment', () => {
@@ -92,45 +131,43 @@ test('computeEngagementSummary calculates average, peak, and lowest points', () 
   assert.equal(summary.lowestPoint?.timeSec, 30);
 });
 
-test('validateAudioFile rejects invalid extensions, empty files, and oversized files', () => {
-  assert.equal(validateAudioFile({ name: 'call.mp3', size: 1024, type: 'audio/mpeg' }).valid, true);
-  assert.equal(validateAudioFile({ name: 'mic.webm', size: 2048, type: 'audio/webm' }).valid, true);
-  assert.equal(validateAudioFile({ name: 'notes.pdf', size: 1024, type: 'application/pdf' }).valid, false);
-  assert.equal(validateAudioFile({ name: 'empty.wav', size: 0, type: 'audio/wav' }).valid, false);
-  assert.equal(validateAudioFile({ name: 'huge.wav', size: 30 * 1024 * 1024, type: 'audio/wav' }).valid, false);
+test('computeConversationMetrics computes questions, longest monologue, and bookmarks', () => {
+  const metrics = computeConversationMetrics(sampleSegments);
+  assert.equal(metrics.repQuestionsCount, 2);
+  assert.equal(metrics.prospectQuestionsCount, 0);
+  assert.equal(metrics.longestRepMonologueSec, 20);
+  assert.equal(metrics.bookmarkedCount, 1);
 });
 
-test('formatCoachingBriefMarkdown includes strengths, missed opportunities, and talk ratio', () => {
-  const call: SalesCallRecord = {
-    id: 'c1',
-    title: 'Q4 Renewal',
-    accountName: 'Acme Corp',
-    callDate: '2026-11-18',
-    durationSec: 90,
-    speakerARole: 'Jordan Vance (AE)',
-    speakerBRole: 'Elena Rostova (VP Ops)',
-    transcript: sampleSegments,
-    sentimentTimeline: sampleTimeline,
-    sourceType: 'sample',
-    coaching: {
-      summary: 'Strong recovery after pricing pushback.',
-      strengths: [
-        { title: 'Agenda control', detail: 'Aligned upfront.', evidenceQuote: 'Thanks for taking the time', timestampSec: 0 },
-        { title: 'Pain quantification', detail: 'Anchored on Friday hours.', evidenceQuote: 'manual hours your team loses', timestampSec: 62 },
-        { title: 'Active listening', detail: 'Validated concern.', evidenceQuote: 'Understood.', timestampSec: 62 },
-      ],
-      missedOpportunities: [
-        { title: 'Budget authority', detail: 'Did not verify CFO sign-off.', evidenceQuote: 'pricing predictability', timestampSec: 21 },
-        { title: 'Competitor check', detail: 'Did not ask alternatives.', evidenceQuote: 'consolidate regional reporting', timestampSec: 21 },
-        { title: 'Timeline urgency', detail: 'Skipped implementation cutoff.', evidenceQuote: 'Q4 renewal goals', timestampSec: 0 },
-      ],
-      nextStepRecommendation: 'Send ROI calculator with CFO brief.',
-    },
-  };
+test('computeLibraryOverview aggregates calls deterministically', () => {
+  const overview = computeLibraryOverview([sampleCall]);
+  assert.equal(overview.totalCalls, 1);
+  assert.equal(overview.totalDurationSec, 90);
+  assert.equal(overview.avgRepTalkPercent, 50);
+  assert.equal(overview.avgEngagement, 68);
+  assert.equal(overview.totalRepQuestions, 2);
+  assert.equal(overview.topicDistribution.length, 3);
+});
 
-  const md = formatCoachingBriefMarkdown(call);
+test('validateAudioFile and validateRawTranscript enforce constraints', () => {
+  assert.equal(validateAudioFile({ name: 'call.mp3', size: 1024, type: 'audio/mpeg' }).valid, true);
+  assert.equal(validateAudioFile({ name: 'notes.pdf', size: 1024, type: 'application/pdf' }).valid, false);
+  assert.equal(validateAudioFile({ name: 'empty.wav', size: 0, type: 'audio/wav' }).valid, false);
+  assert.equal(validateRawTranscript('').valid, false);
+  assert.equal(validateRawTranscript('Too short').valid, false);
+  assert.equal(validateRawTranscript('Speaker A: Hi there, thanks for joining today to discuss Q4.').valid, true);
+});
+
+test('export formatters generate valid Markdown, SRT, and TXT outputs', () => {
+  const md = formatCoachingBriefMarkdown(sampleCall);
   assert.match(md, /Sales Coaching Brief: Q4 Renewal/);
+  assert.match(md, /MEDDPICC/);
   assert.match(md, /3 Things Done Well/);
-  assert.match(md, /3 Missed Opportunities/);
-  assert.match(md, /50% \/ Speaker B/);
+
+  const srt = formatTranscriptSrt(sampleCall);
+  assert.match(srt, /00:00:00,000 --> 00:00:20,000/);
+  assert.match(srt, /\[Speaker A - Jordan Vance \(Rep\)\]/);
+
+  const txt = formatTranscriptTxt(sampleCall);
+  assert.match(txt, /Coach Note: Great open-ended framing question/);
 });

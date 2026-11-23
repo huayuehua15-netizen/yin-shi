@@ -1,13 +1,61 @@
-import { FileAudio, Loader2, Mic, Square, Upload, X } from 'lucide-react';
+import { FileAudio, FileText, Loader2, Mic, Square, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import type { SalesCallRecord } from '../types/call';
-import { formatTimestamp, validateAudioFile } from '../utils/callAnalytics';
+import type { CallStage, CoachingMethodology, SalesCallRecord } from '../types/call';
+import {
+  formatTimestamp,
+  validateAudioFile,
+  validateRawTranscript,
+} from '../utils/callAnalytics';
 
 interface UploadCallModalProps {
   isOpen: boolean;
-  initialMode: 'upload' | 'record';
+  initialMode: 'upload' | 'record' | 'transcript';
   onClose: () => void;
   onCallAnalyzed: (call: SalesCallRecord) => void;
+}
+
+const METHODOLOGIES: CoachingMethodology[] = [
+  'General B2B',
+  'MEDDPICC',
+  'SPIN Selling',
+  'Challenger',
+];
+
+const CALL_STAGES: CallStage[] = [
+  'Discovery',
+  'Product Demo',
+  'Renewal & Expansion',
+  'Security & Procurement',
+];
+
+interface ProviderCapabilities {
+  llmProvider: 'gemini' | 'openai-compatible' | 'local';
+  audioTranscription: boolean;
+  providerLabel: string;
+}
+
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  0?: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
 }
 
 export function UploadCallModal({
@@ -16,13 +64,19 @@ export function UploadCallModal({
   onClose,
   onCallAnalyzed,
 }: UploadCallModalProps) {
-  const [mode, setMode] = useState<'upload' | 'record'>(initialMode);
+  const [mode, setMode] = useState<'upload' | 'record' | 'transcript'>(initialMode);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadTranscript, setUploadTranscript] = useState('');
+  const [pastedTranscript, setPastedTranscript] = useState('');
   const [title, setTitle] = useState('');
   const [accountName, setAccountName] = useState('');
   const [speakerARole, setSpeakerARole] = useState('Sales Rep');
   const [speakerBRole, setSpeakerBRole] = useState('Prospect');
+  const [methodology, setMethodology] = useState<CoachingMethodology>('MEDDPICC');
+  const [callStage, setCallStage] = useState<CallStage>('Discovery');
   const [isDragging, setIsDragging] = useState(false);
+  const [capabilities, setCapabilities] = useState<ProviderCapabilities | null>(null);
+  const [analysisEngine, setAnalysisEngine] = useState<'auto' | 'local'>('auto');
 
   // Microphone recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -41,20 +95,30 @@ export function UploadCallModal({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const speechRecRef = useRef<SpeechRecognitionLike | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode, isOpen]);
-
-  useEffect(() => {
     if (!isOpen) {
       stopRecordingResources();
+      return;
     }
+    let active = true;
+    fetch('/api/capabilities')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: ProviderCapabilities | null) => {
+        if (active && data) {
+          setCapabilities(data);
+        }
+      })
+      .catch(() => {
+        // Fallback silently if offline
+      });
     return () => {
+      active = false;
       stopRecordingResources();
     };
   }, [isOpen]);
@@ -67,6 +131,14 @@ export function UploadCallModal({
     if (rafRef.current) {
       window.cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+    if (speechRecRef.current) {
+      try {
+        speechRecRef.current.stop();
+      } catch {
+        // ignore speech recognition stop errors
+      }
+      speechRecRef.current = null;
     }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
@@ -181,6 +253,14 @@ export function UploadCallModal({
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         setRecordedBlob(blob);
         setRecordedPreviewUrl(URL.createObjectURL(blob));
+        if (speechRecRef.current) {
+          try {
+            speechRecRef.current.stop();
+          } catch {
+            // ignore
+          }
+          speechRecRef.current = null;
+        }
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach((t) => t.stop());
           mediaStreamRef.current = null;
@@ -189,12 +269,11 @@ export function UploadCallModal({
           void audioCtxRef.current.close().catch(() => {});
           audioCtxRef.current = null;
         }
-        if (blob.size > 0) {
+        if (blob.size > 0 && capabilities?.audioTranscription) {
           void transcribeRecordedBlob(blob);
         }
       };
 
-      // Live audio level meter
       try {
         const audioCtx = new AudioContext();
         audioCtxRef.current = audioCtx;
@@ -216,7 +295,40 @@ export function UploadCallModal({
         };
         rafRef.current = window.requestAnimationFrame(updateMeter);
       } catch {
-        // Level meter optional if AudioContext blocked
+        // Level meter optional
+      }
+
+      // Optional browser-native SpeechRecognition (works with zero API key)
+      try {
+        const win = window as unknown as {
+          SpeechRecognition?: new () => SpeechRecognitionLike;
+          webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+        };
+        const SpeechRecCtor = win.SpeechRecognition || win.webkitSpeechRecognition;
+        if (SpeechRecCtor && !capabilities?.audioTranscription) {
+          const rec = new SpeechRecCtor();
+          rec.continuous = true;
+          rec.interimResults = false;
+          rec.lang = navigator.language || 'en-US';
+          rec.onresult = (evt) => {
+            let chunk = '';
+            for (let i = evt.resultIndex; i < evt.results.length; i++) {
+              if (evt.results[i].isFinal && evt.results[i][0]?.transcript) {
+                chunk += evt.results[i][0]!.transcript.trim() + ' ';
+              }
+            }
+            if (chunk.trim()) {
+              setTranscribedText((prev) => (prev ? `${prev}\n${chunk.trim()}` : chunk.trim()));
+            }
+          };
+          rec.onerror = () => {
+            // Keep audio recording running even if speech recognition is unavailable
+          };
+          rec.start();
+          speechRecRef.current = rec;
+        }
+      } catch {
+        // Web Speech API unavailable
       }
 
       setRecordSeconds(0);
@@ -242,6 +354,14 @@ export function UploadCallModal({
     if (rafRef.current) {
       window.cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+    if (speechRecRef.current) {
+      try {
+        speechRecRef.current.stop();
+      } catch {
+        // ignore
+      }
+      speechRecRef.current = null;
     }
     setIsRecording(false);
     setMicLevel(0);
@@ -269,17 +389,34 @@ export function UploadCallModal({
         return;
       }
 
+      if (capabilities && !capabilities.audioTranscription && !uploadTranscript.trim()) {
+        setErrorMessage(
+          'No cloud audio transcription key is configured. Paste the call text below to sync with your audio file, or switch to Paste Text.'
+        );
+        return;
+      }
+
       setIsAnalyzing(true);
-      setStatusMessage('Transcribing audio with Gemini 3.5 Transcribe and generating coaching card...');
+      setStatusMessage(
+        capabilities?.audioTranscription
+          ? `Transcribing audio and scoring via ${methodology}...`
+          : `Analyzing call audio + transcript via ${capabilities?.providerLabel || 'Local Engine'}...`
+      );
 
       try {
         const formData = new FormData();
         formData.append('audio', selectedFile);
+        if (uploadTranscript.trim()) {
+          formData.append('rawTranscript', uploadTranscript.trim());
+        }
         formData.append('title', title.trim() || selectedFile.name.replace(/\.[^/.]+$/, ''));
         formData.append('accountName', accountName.trim() || 'Prospect Account');
         formData.append('speakerARole', speakerARole.trim() || 'Sales Rep');
         formData.append('speakerBRole', speakerBRole.trim() || 'Prospect');
+        formData.append('methodology', methodology);
+        formData.append('callStage', callStage);
         formData.append('sourceType', 'uploaded');
+        formData.append('analysisEngine', analysisEngine);
 
         const response = await fetch('/api/analyze-call', {
           method: 'POST',
@@ -290,12 +427,56 @@ export function UploadCallModal({
           throw new Error(data.error || 'Failed to analyze sales call audio.');
         }
 
-        const localAudioUrl = URL.createObjectURL(selectedFile);
-        onCallAnalyzed({ ...data.call, audioUrl: localAudioUrl });
+        onCallAnalyzed(data.call);
         onClose();
       } catch (err) {
         setErrorMessage(
           err instanceof Error ? err.message : 'Unable to analyze uploaded audio file.'
+        );
+      } finally {
+        setIsAnalyzing(false);
+        setStatusMessage('');
+      }
+      return;
+    }
+
+    if (mode === 'transcript') {
+      const check = validateRawTranscript(pastedTranscript);
+      if (!check.valid) {
+        setErrorMessage(check.error || 'Please paste a valid transcript.');
+        return;
+      }
+
+      setIsAnalyzing(true);
+      setStatusMessage(`Generating diarization, sentiment timeline, and ${methodology} coaching card...`);
+
+      try {
+        const response = await fetch('/api/analyze-call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rawTranscript: pastedTranscript.trim(),
+            durationSec: Math.max(60, Math.round(pastedTranscript.trim().split(/\s+/).length * 0.45)),
+            title: title.trim() || 'Transcript Coaching Review',
+            accountName: accountName.trim() || 'Prospect Account',
+            speakerARole: speakerARole.trim() || 'Sales Rep',
+            speakerBRole: speakerBRole.trim() || 'Prospect',
+            methodology,
+            callStage,
+            sourceType: 'transcript',
+            analysisEngine,
+          }),
+        });
+        const data = (await response.json()) as { call?: SalesCallRecord; error?: string };
+        if (!response.ok || !data.call) {
+          throw new Error(data.error || 'Failed to analyze transcript.');
+        }
+
+        onCallAnalyzed(data.call);
+        onClose();
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Unable to analyze transcript.'
         );
       } finally {
         setIsAnalyzing(false);
@@ -311,11 +492,30 @@ export function UploadCallModal({
     }
 
     setIsAnalyzing(true);
-    setStatusMessage('Analyzing diarization, engagement sentiment, and coaching card...');
+    setStatusMessage(`Analyzing diarization, engagement sentiment, and ${methodology} coaching card...`);
 
     try {
       let response: Response;
-      if (transcribedText.trim()) {
+      if (recordedBlob) {
+        const formData = new FormData();
+        formData.append('audio', recordedBlob, 'microphone-recording.webm');
+        if (transcribedText.trim()) {
+          formData.append('rawTranscript', transcribedText.trim());
+        }
+        formData.append('durationSec', String(Math.max(15, recordSeconds)));
+        formData.append('title', title.trim() || 'Live Microphone Coaching Session');
+        formData.append('accountName', accountName.trim() || 'Prospect Account');
+        formData.append('speakerARole', speakerARole.trim() || 'Sales Rep');
+        formData.append('speakerBRole', speakerBRole.trim() || 'Prospect');
+        formData.append('methodology', methodology);
+        formData.append('callStage', callStage);
+        formData.append('sourceType', 'microphone');
+        formData.append('analysisEngine', analysisEngine);
+        response = await fetch('/api/analyze-call', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
         response = await fetch('/api/analyze-call', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -326,24 +526,12 @@ export function UploadCallModal({
             accountName: accountName.trim() || 'Prospect Account',
             speakerARole: speakerARole.trim() || 'Sales Rep',
             speakerBRole: speakerBRole.trim() || 'Prospect',
+            methodology,
+            callStage,
             sourceType: 'microphone',
+            analysisEngine,
           }),
         });
-      } else if (recordedBlob) {
-        const formData = new FormData();
-        formData.append('audio', recordedBlob, 'microphone-recording.webm');
-        formData.append('durationSec', String(Math.max(15, recordSeconds)));
-        formData.append('title', title.trim() || 'Live Microphone Coaching Session');
-        formData.append('accountName', accountName.trim() || 'Prospect Account');
-        formData.append('speakerARole', speakerARole.trim() || 'Sales Rep');
-        formData.append('speakerBRole', speakerBRole.trim() || 'Prospect');
-        formData.append('sourceType', 'microphone');
-        response = await fetch('/api/analyze-call', {
-          method: 'POST',
-          body: formData,
-        });
-      } else {
-        throw new Error('No microphone recording or transcript found.');
       }
 
       const data = (await response.json()) as { call?: SalesCallRecord; error?: string };
@@ -351,10 +539,7 @@ export function UploadCallModal({
         throw new Error(data.error || 'Failed to analyze recorded call.');
       }
 
-      onCallAnalyzed({
-        ...data.call,
-        audioUrl: recordedPreviewUrl || undefined,
-      });
+      onCallAnalyzed(data.call);
       onClose();
     } catch (err) {
       setErrorMessage(
@@ -380,10 +565,10 @@ export function UploadCallModal({
               id="upload-call-modal-title"
               className="font-display text-base font-semibold text-slate-900"
             >
-              Ingest Sales Call Audio
+              Ingest Sales Call
             </h2>
             <p className="text-xs text-slate-500">
-              Upload a call file or capture audio via microphone for transcription and AI coaching.
+              Upload audio, record via microphone, or paste a transcript for AI coaching intelligence.
             </p>
           </div>
           <button
@@ -397,23 +582,23 @@ export function UploadCallModal({
           </button>
         </div>
 
-        <form onSubmit={handleAnalyzeSubmit} className="p-6 space-y-5 overflow-y-auto">
-          {/* Mode Switcher */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+        <form onSubmit={handleAnalyzeSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {/* 3-Tab Mode Switcher */}
+          <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-lg">
             <button
               type="button"
               onClick={() => {
                 setMode('upload');
                 setErrorMessage(null);
               }}
-              className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+              className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium rounded-md whitespace-nowrap ${
                 mode === 'upload'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Upload className="w-4 h-4" />
-              <span>Upload Audio File</span>
+              <Upload className="w-3.5 h-3.5 shrink-0" />
+              <span>Upload Audio</span>
             </button>
             <button
               type="button"
@@ -421,19 +606,34 @@ export function UploadCallModal({
                 setMode('record');
                 setErrorMessage(null);
               }}
-              className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+              className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium rounded-md whitespace-nowrap ${
                 mode === 'record'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Mic className="w-4 h-4" />
-              <span>Record Microphone</span>
+              <Mic className="w-3.5 h-3.5 shrink-0" />
+              <span>Microphone</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('transcript');
+                setErrorMessage(null);
+              }}
+              className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium rounded-md whitespace-nowrap ${
+                mode === 'transcript'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 shrink-0" />
+              <span>Paste Text</span>
             </button>
           </div>
 
-          {mode === 'upload' ? (
-            <div>
+          {mode === 'upload' && (
+            <div className="space-y-3">
               <div
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -488,8 +688,29 @@ export function UploadCallModal({
                   </div>
                 )}
               </div>
+
+              {capabilities && !capabilities.audioTranscription && (
+                <div>
+                  <label
+                    htmlFor="upload-accompanying-transcript"
+                    className="block text-xs font-medium text-slate-700 mb-1"
+                  >
+                    Transcript Text (Zero-Key Local Mode — audio file still saves for playback)
+                  </label>
+                  <textarea
+                    id="upload-accompanying-transcript"
+                    rows={3}
+                    value={uploadTranscript}
+                    onChange={(e) => setUploadTranscript(e.target.value)}
+                    placeholder="Rep: Thanks for joining today...&#10;Prospect: Our team is reviewing options..."
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              )}
             </div>
-          ) : (
+          )}
+
+          {mode === 'record' && (
             <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/70 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -497,7 +718,9 @@ export function UploadCallModal({
                     {isRecording ? 'Recording in progress' : 'Microphone Audio Capture'}
                   </p>
                   <p className="text-xs text-slate-500">
-                    Powered by Gemini 3.5 Transcribe
+                    {capabilities?.audioTranscription
+                      ? `Auto-transcribes via ${capabilities.providerLabel}`
+                      : 'Browser speech-to-text + editable notes (Zero-Key Local Mode)'}
                   </p>
                 </div>
 
@@ -512,7 +735,7 @@ export function UploadCallModal({
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 whitespace-nowrap"
                     >
                       <Square className="w-3.5 h-3.5 fill-current" />
-                      <span>Stop &amp; Transcribe</span>
+                      <span>{capabilities?.audioTranscription ? 'Stop & Transcribe' : 'Stop Recording'}</span>
                     </button>
                   ) : (
                     <button
@@ -528,7 +751,6 @@ export function UploadCallModal({
                 </div>
               </div>
 
-              {/* Input level meter */}
               <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
                 <div
                   style={{ width: `${isRecording ? Math.max(8, micLevel) : 0}%` }}
@@ -560,14 +782,33 @@ export function UploadCallModal({
                   rows={4}
                   value={transcribedText}
                   onChange={(e) => setTranscribedText(e.target.value)}
-                  placeholder="Record with your microphone to auto-transcribe, or paste/edit call dialogue here..."
+                  placeholder="Record with your microphone to auto-transcribe, or edit call dialogue here..."
                   className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
             </div>
           )}
 
-          {/* Call Context Metadata */}
+          {mode === 'transcript' && (
+            <div>
+              <label
+                htmlFor="paste-transcript-input"
+                className="block text-xs font-medium text-slate-700 mb-1.5"
+              >
+                Raw Call Transcript
+              </label>
+              <textarea
+                id="paste-transcript-input"
+                rows={5}
+                value={pastedTranscript}
+                onChange={(e) => setPastedTranscript(e.target.value)}
+                placeholder="Paste a call transcript (e.g. Rep: Thanks for joining today... Prospect: We are evaluating Q4 tools...)"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+          )}
+
+          {/* Call Context & Coaching Framework */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label htmlFor="call-title-input" className="block text-xs font-medium text-slate-700 mb-1">
@@ -622,7 +863,60 @@ export function UploadCallModal({
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
+
+            <div>
+              <label htmlFor="methodology-select" className="block text-xs font-medium text-slate-700 mb-1">
+                Coaching Methodology
+              </label>
+              <select
+                id="methodology-select"
+                value={methodology}
+                onChange={(e) => setMethodology(e.target.value as CoachingMethodology)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                {METHODOLOGIES.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="call-stage-select" className="block text-xs font-medium text-slate-700 mb-1">
+                Call Stage
+              </label>
+              <select
+                id="call-stage-select"
+                value={callStage}
+                onChange={(e) => setCallStage(e.target.value as CallStage)}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                {CALL_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {capabilities && capabilities.llmProvider !== 'local' && (
+            <div>
+              <label htmlFor="analysis-engine-select" className="block text-xs font-medium text-slate-700 mb-1">
+                Analysis Engine
+              </label>
+              <select
+                id="analysis-engine-select"
+                value={analysisEngine}
+                onChange={(e) => setAnalysisEngine(e.target.value as 'auto' | 'local')}
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="auto">Auto ({capabilities.providerLabel} with local fallback)</option>
+                <option value="local">Local Engine (Zero-Key Instant Analysis)</option>
+              </select>
+            </div>
+          )}
 
           {errorMessage && (
             <div

@@ -2,6 +2,10 @@ export type SpeakerRole = 'Speaker A' | 'Speaker B';
 
 export type MilestoneType = 'peak' | 'dip' | 'objection' | 'commitment';
 
+export type CoachingMethodology = 'General B2B' | 'MEDDPICC' | 'SPIN Selling' | 'Challenger';
+
+export type CallStage = 'Discovery' | 'Product Demo' | 'Renewal & Expansion' | 'Security & Procurement';
+
 export interface TranscriptSegment {
   id: string;
   speaker: SpeakerRole;
@@ -11,6 +15,8 @@ export interface TranscriptSegment {
   text: string;
   sentimentScore: number; // -1.0 to 1.0
   topicTag?: string;
+  bookmarked?: boolean;
+  coachNote?: string;
 }
 
 export interface SentimentPoint {
@@ -34,6 +40,7 @@ export interface CoachingCard {
   strengths: CoachingPoint[];
   missedOpportunities: CoachingPoint[];
   nextStepRecommendation: string;
+  nextStepCompleted?: boolean;
 }
 
 export interface SalesCallRecord {
@@ -44,12 +51,14 @@ export interface SalesCallRecord {
   durationSec: number;
   speakerARole: string;
   speakerBRole: string;
+  methodology?: CoachingMethodology;
+  callStage?: CallStage;
   audioUrl?: string;
   rawTranscript?: string;
   transcript: TranscriptSegment[];
   sentimentTimeline: SentimentPoint[];
   coaching: CoachingCard;
-  sourceType: 'sample' | 'uploaded' | 'microphone';
+  sourceType: 'sample' | 'uploaded' | 'microphone' | 'transcript';
 }
 
 export interface CoachChatMessage {

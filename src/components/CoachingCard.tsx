@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Loader2, Send } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import type { CoachChatMessage, SalesCallRecord } from '../types/call';
 import { formatTimestamp } from '../utils/callAnalytics';
@@ -6,6 +6,7 @@ import { formatTimestamp } from '../utils/callAnalytics';
 interface CoachingCardProps {
   call: SalesCallRecord;
   onSeek: (timeSec: number) => void;
+  onToggleNextStep: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -14,7 +15,7 @@ const QUICK_PROMPTS = [
   'List 3 discovery questions to ask next call',
 ];
 
-export function CoachingCard({ call, onSeek }: CoachingCardProps) {
+export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardProps) {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<CoachChatMessage[]>([]);
   const [isAsking, setIsAsking] = useState(false);
@@ -71,11 +72,13 @@ export function CoachingCard({ call, onSeek }: CoachingCardProps) {
     >
       {/* Header & Executive Summary */}
       <div className="p-5">
-        <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <h2 className="font-display text-base font-semibold text-slate-900">
             AI Coaching Card
           </h2>
-          <span className="text-xs text-slate-500">3 Strengths · 3 Missed Opportunities</span>
+          <span className="text-xs text-slate-500">
+            {call.methodology || 'General B2B'} · 3 Strengths · 3 Missed Opportunities
+          </span>
         </div>
         <p className="text-sm leading-relaxed text-slate-700">{call.coaching.summary}</p>
       </div>
@@ -152,12 +155,31 @@ export function CoachingCard({ call, onSeek }: CoachingCardProps) {
         </ol>
       </div>
 
-      {/* Recommended Next Step */}
+      {/* Recommended Next Step with persisted completion toggle */}
       <div className="p-5 bg-slate-50/70">
-        <h3 className="text-xs font-semibold text-slate-500 mb-1.5">
-          Recommended Next Step
-        </h3>
-        <p className="text-sm text-slate-800 leading-relaxed">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <h3 className="text-xs font-semibold text-slate-500">
+            Recommended Next Step
+          </h3>
+          <button
+            type="button"
+            onClick={onToggleNextStep}
+            aria-pressed={Boolean(call.coaching.nextStepCompleted)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
+              call.coaching.nextStepCompleted
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>{call.coaching.nextStepCompleted ? 'Completed' : 'Mark Done'}</span>
+          </button>
+        </div>
+        <p
+          className={`text-sm leading-relaxed ${
+            call.coaching.nextStepCompleted ? 'text-slate-500 line-through' : 'text-slate-800'
+          }`}
+        >
           {call.coaching.nextStepRecommendation}
         </p>
       </div>

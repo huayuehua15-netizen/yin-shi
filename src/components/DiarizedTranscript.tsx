@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react';
+import { Bookmark, MessageSquarePlus, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { SpeakerRole, TranscriptSegment } from '../types/call';
 import {
@@ -13,6 +13,8 @@ interface DiarizedTranscriptProps {
   speakerBRole: string;
   currentTimeSec: number;
   onSeek: (timeSec: number) => void;
+  onToggleBookmark: (turnId: string) => void;
+  onSaveCoachNote: (turnId: string, note: string) => void;
 }
 
 export function DiarizedTranscript({
@@ -21,9 +23,13 @@ export function DiarizedTranscript({
   speakerBRole,
   currentTimeSec,
   onSeek,
+  onToggleBookmark,
+  onSaveCoachNote,
 }: DiarizedTranscriptProps) {
-  const [speakerFilter, setSpeakerFilter] = useState<'all' | SpeakerRole>('all');
+  const [speakerFilter, setSpeakerFilter] = useState<'all' | SpeakerRole | 'bookmarked'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingNoteTurnId, setEditingNoteTurnId] = useState<string | null>(null);
+  const [draftNote, setDraftNote] = useState('');
 
   const activeSegment = useMemo(
     () => findActiveSegmentAtTime(segments, currentTimeSec),
@@ -35,7 +41,23 @@ export function DiarizedTranscript({
     [segments, speakerFilter, searchQuery]
   );
 
+  const bookmarkedCount = useMemo(
+    () => segments.filter((s) => s.bookmarked).length,
+    [segments]
+  );
+
   const hasFilters = speakerFilter !== 'all' || searchQuery.trim().length > 0;
+
+  const openNoteEditor = (seg: TranscriptSegment) => {
+    setEditingNoteTurnId(seg.id);
+    setDraftNote(seg.coachNote || '');
+  };
+
+  const submitNote = (turnId: string) => {
+    onSaveCoachNote(turnId, draftNote);
+    setEditingNoteTurnId(null);
+    setDraftNote('');
+  };
 
   return (
     <section
@@ -65,9 +87,9 @@ export function DiarizedTranscript({
           <div
             role="group"
             aria-label="Filter transcript by speaker"
-            className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0"
+            className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0 overflow-x-auto"
           >
-            {(['all', 'Speaker A', 'Speaker B'] as const).map((option) => (
+            {(['all', 'Speaker A', 'Speaker B', 'bookmarked'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -79,7 +101,11 @@ export function DiarizedTranscript({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {option === 'all' ? 'All Speakers' : option}
+                {option === 'all'
+                  ? 'All Speakers'
+                  : option === 'bookmarked'
+                    ? `Bookmarked (${bookmarkedCount})`
+                    : option}
               </button>
             ))}
           </div>
@@ -97,7 +123,7 @@ export function DiarizedTranscript({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search keywords or topics..."
+              placeholder="Search keywords, topics, or notes..."
               className="w-full pl-9 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
             {searchQuery && (
@@ -114,7 +140,7 @@ export function DiarizedTranscript({
         </div>
       </div>
 
-      <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
+      <div className="divide-y divide-slate-100 max-h-[680px] overflow-y-auto">
         {filteredSegments.length === 0 ? (
           <div className="p-10 text-center space-y-2.5">
             <p className="text-sm font-medium text-slate-800">
@@ -140,12 +166,13 @@ export function DiarizedTranscript({
           filteredSegments.map((seg) => {
             const isActive = activeSegment?.id === seg.id;
             const isSpeakerA = seg.speaker === 'Speaker A';
+            const isEditingNote = editingNoteTurnId === seg.id;
 
             return (
               <div
                 key={seg.id}
                 data-active-segment={isActive ? 'true' : 'false'}
-                className={`px-5 py-4 transition-colors ${
+                className={`group px-5 py-4 transition-colors ${
                   isActive ? 'bg-blue-50/75' : 'hover:bg-slate-50/80'
                 }`}
               >
@@ -172,21 +199,96 @@ export function DiarizedTranscript({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onSeek(seg.startSec)}
-                    aria-label={`Jump to ${formatTimestamp(seg.startSec)}`}
-                    className={`font-mono tabular-nums text-xs px-2 py-0.5 rounded transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
-                      isActive
-                        ? 'bg-blue-700 text-white font-medium'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/70'
-                    }`}
-                  >
-                    {formatTimestamp(seg.startSec)}
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onToggleBookmark(seg.id)}
+                      aria-label={
+                        seg.bookmarked
+                          ? `Remove bookmark at ${formatTimestamp(seg.startSec)}`
+                          : `Bookmark turn at ${formatTimestamp(seg.startSec)}`
+                      }
+                      aria-pressed={Boolean(seg.bookmarked)}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                        seg.bookmarked
+                          ? 'text-blue-700 bg-blue-100/70'
+                          : 'text-slate-400 opacity-70 group-hover:opacity-100 hover:text-slate-700 hover:bg-slate-200/70'
+                      }`}
+                    >
+                      <Bookmark className={`w-3.5 h-3.5 ${seg.bookmarked ? 'fill-current' : ''}`} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openNoteEditor(seg)}
+                      aria-label={`Add coach note at ${formatTimestamp(seg.startSec)}`}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded text-slate-400 opacity-70 group-hover:opacity-100 hover:text-slate-700 hover:bg-slate-200/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                    >
+                      <MessageSquarePlus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onSeek(seg.startSec)}
+                      aria-label={`Jump to ${formatTimestamp(seg.startSec)}`}
+                      className={`font-mono tabular-nums text-xs px-2 py-0.5 rounded transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                        isActive
+                          ? 'bg-blue-700 text-white font-medium'
+                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/70'
+                      }`}
+                    >
+                      {formatTimestamp(seg.startSec)}
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-sm leading-relaxed text-slate-800">{seg.text}</p>
+
+                {seg.coachNote && !isEditingNote && (
+                  <div className="mt-2 px-3 py-1.5 rounded-md bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-semibold">Coach Note: </span>
+                      <span>{seg.coachNote}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openNoteEditor(seg)}
+                      className="text-amber-800 hover:underline shrink-0"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )}
+
+                {isEditingNote && (
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <label htmlFor={`note-input-${seg.id}`} className="sr-only">
+                      Coach note for {formatTimestamp(seg.startSec)}
+                    </label>
+                    <input
+                      id={`note-input-${seg.id}`}
+                      type="text"
+                      value={draftNote}
+                      onChange={(e) => setDraftNote(e.target.value)}
+                      placeholder="Write a manager coaching note..."
+                      className="flex-1 min-w-0 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => submitNote(seg.id)}
+                      className="px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium hover:bg-slate-800"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingNoteTurnId(null)}
+                      className="px-2 py-1.5 rounded-md border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })

@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react';
-import type { SentimentPoint } from '../types/call';
-import { computeEngagementSummary, formatTimestamp } from '../utils/callAnalytics';
+import type { SentimentPoint, TranscriptSegment } from '../types/call';
+import {
+  computeConversationMetrics,
+  computeEngagementSummary,
+  formatDurationLabel,
+  formatTimestamp,
+} from '../utils/callAnalytics';
 
 interface SentimentGraphProps {
   timeline: SentimentPoint[];
+  transcript: TranscriptSegment[];
   durationSec: number;
   currentTimeSec: number;
   onSeek: (timeSec: number) => void;
@@ -39,14 +45,17 @@ function buildSmoothPath(coords: Array<{ x: number; y: number }>): string {
 
 export function SentimentGraph({
   timeline,
+  transcript,
   durationSec,
   currentTimeSec,
   onSeek,
 }: SentimentGraphProps) {
   const [showProspectLine, setShowProspectLine] = useState(true);
+  const [showRepEnergyLine, setShowRepEnergyLine] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const summary = useMemo(() => computeEngagementSummary(timeline), [timeline]);
+  const convMetrics = useMemo(() => computeConversationMetrics(transcript), [transcript]);
 
   const effectiveDuration = Math.max(
     1,
@@ -57,7 +66,8 @@ export function SentimentGraph({
   const plotW = CHART_WIDTH - PAD_LEFT - PAD_RIGHT;
   const plotH = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
 
-  const toX = (timeSec: number) => PAD_LEFT + (Math.min(effectiveDuration, Math.max(0, timeSec)) / effectiveDuration) * plotW;
+  const toX = (timeSec: number) =>
+    PAD_LEFT + (Math.min(effectiveDuration, Math.max(0, timeSec)) / effectiveDuration) * plotW;
   const toY = (score: number) => PAD_TOP + (1 - Math.min(100, Math.max(0, score)) / 100) * plotH;
 
   const engagementCoords = useMemo(
@@ -70,8 +80,14 @@ export function SentimentGraph({
     [timeline, effectiveDuration]
   );
 
+  const repEnergyCoords = useMemo(
+    () => timeline.map((pt) => ({ x: toX(pt.timeSec), y: toY(pt.repEnergy) })),
+    [timeline, effectiveDuration]
+  );
+
   const engagementPath = useMemo(() => buildSmoothPath(engagementCoords), [engagementCoords]);
   const prospectPath = useMemo(() => buildSmoothPath(prospectCoords), [prospectCoords]);
+  const repEnergyPath = useMemo(() => buildSmoothPath(repEnergyCoords), [repEnergyCoords]);
 
   const areaPath = useMemo(() => {
     if (engagementCoords.length === 0) return '';
@@ -98,24 +114,42 @@ export function SentimentGraph({
       data-testid="sentiment-graph-section"
       className="bg-white border border-slate-200 rounded-xl p-5"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="font-display text-base font-semibold text-slate-900">
             Sentiment &amp; Engagement Graph
           </h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Avg Engagement{' '}
-            <span className="font-mono tabular-nums font-medium text-slate-800">
-              {summary.averageEngagement}%
+          <p className="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span>
+              Avg Engagement{' '}
+              <span className="font-mono tabular-nums font-medium text-slate-800">
+                {summary.averageEngagement}%
+              </span>
             </span>
-            <span aria-hidden="true"> · </span>
-            Avg Prospect Sentiment{' '}
-            <span className="font-mono tabular-nums font-medium text-slate-800">
-              {summary.averageProspectSentiment}%
+            <span aria-hidden="true">·</span>
+            <span>
+              Prospect Sentiment{' '}
+              <span className="font-mono tabular-nums font-medium text-slate-800">
+                {summary.averageProspectSentiment}%
+              </span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              Rep Questions{' '}
+              <span className="font-mono tabular-nums font-medium text-slate-800">
+                {convMetrics.repQuestionsCount}
+              </span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              Longest Monologue{' '}
+              <span className="font-mono tabular-nums font-medium text-slate-800">
+                {formatDurationLabel(convMetrics.longestRepMonologueSec)}
+              </span>
             </span>
             {summary.peakPoint && (
               <>
-                <span aria-hidden="true"> · </span>
+                <span aria-hidden="true">·</span>
                 <span>
                   Peak{' '}
                   <span className="font-mono tabular-nums font-medium text-emerald-700">
@@ -128,29 +162,43 @@ export function SentimentGraph({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-3 text-xs text-slate-600">
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-              <span className="w-3 h-0.5 bg-blue-700 inline-block" aria-hidden="true" />
-              Engagement
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowProspectLine((v) => !v)}
-              aria-pressed={showProspectLine}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
-                showProspectLine
-                  ? 'border-slate-300 bg-slate-50 text-slate-800 font-medium'
-                  : 'border-slate-200 bg-white text-slate-400'
-              }`}
-            >
-              <span
-                className={`w-3 h-0.5 inline-block ${showProspectLine ? 'bg-emerald-600' : 'bg-slate-300'}`}
-                aria-hidden="true"
-              />
-              Prospect Sentiment
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-700 font-medium whitespace-nowrap">
+            <span className="w-3 h-0.5 bg-blue-700 inline-block" aria-hidden="true" />
+            Engagement
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowProspectLine((v) => !v)}
+            aria-pressed={showProspectLine}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+              showProspectLine
+                ? 'border-slate-300 bg-slate-50 text-slate-800 font-medium'
+                : 'border-slate-200 bg-white text-slate-400'
+            }`}
+          >
+            <span
+              className={`w-3 h-0.5 inline-block ${showProspectLine ? 'bg-emerald-600' : 'bg-slate-300'}`}
+              aria-hidden="true"
+            />
+            Prospect Sentiment
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowRepEnergyLine((v) => !v)}
+            aria-pressed={showRepEnergyLine}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+              showRepEnergyLine
+                ? 'border-slate-300 bg-slate-50 text-slate-800 font-medium'
+                : 'border-slate-200 bg-white text-slate-400'
+            }`}
+          >
+            <span
+              className={`w-3 h-0.5 inline-block ${showRepEnergyLine ? 'bg-amber-600' : 'bg-slate-300'}`}
+              aria-hidden="true"
+            />
+            Rep Energy
+          </button>
         </div>
       </div>
 
@@ -174,7 +222,6 @@ export function SentimentGraph({
               </linearGradient>
             </defs>
 
-            {/* Horizontal reference grid */}
             {yTicks.map((tick) => {
               const y = toY(tick);
               return (
@@ -200,7 +247,6 @@ export function SentimentGraph({
               );
             })}
 
-            {/* X-axis timestamps */}
             {xTicks.map((sec, idx) => {
               const x = toX(sec);
               return (
@@ -216,7 +262,6 @@ export function SentimentGraph({
               );
             })}
 
-            {/* Engagement area & curve */}
             {areaPath && <path d={areaPath} fill="url(#engagementAreaGrad)" />}
             {engagementPath && (
               <path
@@ -228,7 +273,6 @@ export function SentimentGraph({
               />
             )}
 
-            {/* Prospect sentiment curve */}
             {showProspectLine && prospectPath && (
               <path
                 d={prospectPath}
@@ -240,7 +284,17 @@ export function SentimentGraph({
               />
             )}
 
-            {/* Synchronized playhead line */}
+            {showRepEnergyLine && repEnergyPath && (
+              <path
+                d={repEnergyPath}
+                fill="none"
+                stroke="#D97706"
+                strokeWidth="2"
+                strokeDasharray="2 3"
+                strokeLinecap="round"
+              />
+            )}
+
             <line
               x1={playheadX}
               y1={PAD_TOP - 6}
@@ -251,7 +305,6 @@ export function SentimentGraph({
               strokeDasharray="3 3"
             />
 
-            {/* Interactive data points */}
             {timeline.map((pt, idx) => {
               const cx = toX(pt.timeSec);
               const cy = toY(pt.engagement);
@@ -268,7 +321,6 @@ export function SentimentGraph({
 
               return (
                 <g key={`${pt.timeSec}-${idx}`}>
-                  {/* Larger invisible hit area for effortless hover & click */}
                   <circle
                     cx={cx}
                     cy={cy}
@@ -293,7 +345,6 @@ export function SentimentGraph({
             })}
           </svg>
 
-          {/* Hover readout bar */}
           {activePoint && (
             <div
               role="status"
@@ -318,7 +369,6 @@ export function SentimentGraph({
             </div>
           )}
 
-          {/* Clickable inflection milestone strip */}
           {milestones.length > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium text-slate-500 mr-1">Key moments:</span>

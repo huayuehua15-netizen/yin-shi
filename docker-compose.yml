@@ -1,0 +1,14 @@
+services:
+  cadence:
+    build: .
+    container_name: cadence-sales-coaching
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CADENCE_DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

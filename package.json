@@ -1,7 +1,9 @@
 {
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
+  "name": "cadence-sales-coaching",
+  "private": false,
+  "version": "1.0.0",
+  "description": "Open-source AI sales coaching intelligence platform powered by Node.js, React, and Gemini.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -9,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/utils/*.test.ts server/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",

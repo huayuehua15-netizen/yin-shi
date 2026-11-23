@@ -26,6 +26,15 @@ export function formatTimestamp(totalSeconds: number): string {
   return `${mm}:${ss}`;
 }
 
+export function formatSrtTimestamp(totalSeconds: number): string {
+  const safe = Math.max(0, Number.isFinite(totalSeconds) ? totalSeconds : 0);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = Math.floor(safe % 60);
+  const millis = Math.round((safe - Math.floor(safe)) * 1000);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+}
+
 export function formatDurationLabel(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
     return '0s';
@@ -80,13 +89,15 @@ export function computeTalkRatio(segments: TranscriptSegment[]): TalkRatioResult
 
 export function filterTranscriptSegments(
   segments: TranscriptSegment[],
-  speakerFilter: 'all' | SpeakerRole,
+  speakerFilter: 'all' | SpeakerRole | 'bookmarked',
   query: string
 ): TranscriptSegment[] {
   const normalizedQuery = query.trim().toLowerCase();
 
   return segments.filter((seg) => {
-    if (speakerFilter !== 'all' && seg.speaker !== speakerFilter) {
+    if (speakerFilter === 'bookmarked') {
+      if (!seg.bookmarked) return false;
+    } else if (speakerFilter !== 'all' && seg.speaker !== speakerFilter) {
       return false;
     }
     if (!normalizedQuery) {
@@ -95,7 +106,8 @@ export function filterTranscriptSegments(
     return (
       seg.text.toLowerCase().includes(normalizedQuery) ||
       seg.speakerLabel.toLowerCase().includes(normalizedQuery) ||
-      (seg.topicTag ? seg.topicTag.toLowerCase().includes(normalizedQuery) : false)
+      (seg.topicTag ? seg.topicTag.toLowerCase().includes(normalizedQuery) : false) ||
+      (seg.coachNote ? seg.coachNote.toLowerCase().includes(normalizedQuery) : false)
     );
   });
 }
@@ -112,7 +124,6 @@ export function findActiveSegmentAtTime(
     return exact;
   }
 
-  // Fallback to the nearest preceding segment if between turns
   let nearest: TranscriptSegment | null = null;
   for (const seg of segments) {
     if (seg.startSec <= currentSec) {
@@ -165,6 +176,125 @@ export function computeEngagementSummary(timeline: SentimentPoint[]): Engagement
   };
 }
 
+export interface ConversationMetrics {
+  repQuestionsCount: number;
+  prospectQuestionsCount: number;
+  longestRepMonologueSec: number;
+  averageTurnLengthSec: number;
+  bookmarkedCount: number;
+}
+
+export function computeConversationMetrics(segments: TranscriptSegment[]): ConversationMetrics {
+  if (segments.length === 0) {
+    return {
+      repQuestionsCount: 0,
+      prospectQuestionsCount: 0,
+      longestRepMonologueSec: 0,
+      averageTurnLengthSec: 0,
+      bookmarkedCount: 0,
+    };
+  }
+
+  let repQuestionsCount = 0;
+  let prospectQuestionsCount = 0;
+  let longestRepMonologueSec = 0;
+  let totalTurnSec = 0;
+  let bookmarkedCount = 0;
+
+  let currentRepStreakSec = 0;
+
+  for (const seg of segments) {
+    const turnDur = Math.max(1, seg.endSec - seg.startSec);
+    totalTurnSec += turnDur;
+
+    const questionMarks = (seg.text.match(/\?/g) || []).length;
+    if (seg.speaker === 'Speaker A') {
+      repQuestionsCount += questionMarks;
+      currentRepStreakSec += turnDur;
+      if (currentRepStreakSec > longestRepMonologueSec) {
+        longestRepMonologueSec = currentRepStreakSec;
+      }
+    } else {
+      prospectQuestionsCount += questionMarks;
+      currentRepStreakSec = 0;
+    }
+
+    if (seg.bookmarked) {
+      bookmarkedCount += 1;
+    }
+  }
+
+  return {
+    repQuestionsCount,
+    prospectQuestionsCount,
+    longestRepMonologueSec: Math.round(longestRepMonologueSec),
+    averageTurnLengthSec: Math.round(totalTurnSec / segments.length),
+    bookmarkedCount,
+  };
+}
+
+export interface LibraryOverview {
+  totalCalls: number;
+  totalDurationSec: number;
+  avgRepTalkPercent: number;
+  avgEngagement: number;
+  avgProspectSentiment: number;
+  totalRepQuestions: number;
+  topicDistribution: Array<{ topic: string; count: number }>;
+}
+
+export function computeLibraryOverview(calls: SalesCallRecord[]): LibraryOverview {
+  if (calls.length === 0) {
+    return {
+      totalCalls: 0,
+      totalDurationSec: 0,
+      avgRepTalkPercent: 50,
+      avgEngagement: 0,
+      avgProspectSentiment: 0,
+      totalRepQuestions: 0,
+      topicDistribution: [],
+    };
+  }
+
+  let totalDurationSec = 0;
+  let repTalkSum = 0;
+  let engagementSum = 0;
+  let sentimentSum = 0;
+  let totalRepQuestions = 0;
+  const topicCounts = new Map<string, number>();
+
+  for (const call of calls) {
+    totalDurationSec += call.durationSec;
+    repTalkSum += computeTalkRatio(call.transcript).speakerAPercent;
+    const eng = computeEngagementSummary(call.sentimentTimeline);
+    engagementSum += eng.averageEngagement;
+    sentimentSum += eng.averageProspectSentiment;
+    totalRepQuestions += computeConversationMetrics(call.transcript).repQuestionsCount;
+
+    for (const seg of call.transcript) {
+      if (seg.topicTag) {
+        const tag = seg.topicTag.trim();
+        topicCounts.set(tag, (topicCounts.get(tag) || 0) + 1);
+      }
+    }
+  }
+
+  const topicDistribution = Array.from(topicCounts.entries())
+    .map(([topic, count]) => ({ topic, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  return {
+    totalCalls: calls.length,
+    totalDurationSec,
+    avgRepTalkPercent: Math.round(repTalkSum / calls.length),
+    avgEngagement: Math.round(engagementSum / calls.length),
+    avgProspectSentiment: Math.round(sentimentSum / calls.length),
+    totalRepQuestions,
+    topicDistribution,
+  };
+}
+
 export function validateAudioFile(file: {
   name: string;
   size: number;
@@ -194,6 +324,20 @@ export function validateAudioFile(file: {
   return { valid: true };
 }
 
+export function validateRawTranscript(text: string): { valid: boolean; error?: string } {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'Please paste a sales call transcript to analyze.' };
+  }
+  if (trimmed.length < 30) {
+    return {
+      valid: false,
+      error: 'Transcript is too short. Provide at least a few lines of conversation.',
+    };
+  }
+  return { valid: true };
+}
+
 export function normalizeSpeakerNames(
   speakerARole: string,
   speakerBRole: string
@@ -207,12 +351,14 @@ export function normalizeSpeakerNames(
 export function formatCoachingBriefMarkdown(call: SalesCallRecord): string {
   const talkRatio = computeTalkRatio(call.transcript);
   const summary = computeEngagementSummary(call.sentimentTimeline);
+  const metrics = computeConversationMetrics(call.transcript);
 
   const lines: string[] = [
     `# Sales Coaching Brief: ${call.title}`,
     `Account: ${call.accountName} | Date: ${call.callDate} | Duration: ${formatDurationLabel(call.durationSec)}`,
+    `Methodology: ${call.methodology || 'General B2B'} | Stage: ${call.callStage || 'Sales Call'}`,
     `Talk Ratio: Speaker A (${call.speakerARole}) ${talkRatio.speakerAPercent}% / Speaker B (${call.speakerBRole}) ${talkRatio.speakerBPercent}%`,
-    `Average Engagement: ${summary.averageEngagement}/100`,
+    `Average Engagement: ${summary.averageEngagement}/100 | Rep Questions: ${metrics.repQuestionsCount} | Longest Monologue: ${formatDurationLabel(metrics.longestRepMonologueSec)}`,
     '',
     '## Executive Summary',
     call.coaching.summary,
@@ -234,4 +380,27 @@ export function formatCoachingBriefMarkdown(call: SalesCallRecord): string {
   ];
 
   return lines.join('\n');
+}
+
+export function formatTranscriptSrt(call: SalesCallRecord): string {
+  return call.transcript
+    .map((seg, idx) => {
+      const start = formatSrtTimestamp(seg.startSec);
+      const end = formatSrtTimestamp(Math.max(seg.startSec + 1, seg.endSec));
+      return `${idx + 1}\n${start} --> ${end}\n[${seg.speaker} - ${seg.speakerLabel}] ${seg.text}`;
+    })
+    .join('\n\n');
+}
+
+export function formatTranscriptTxt(call: SalesCallRecord): string {
+  const header = `${call.title} (${call.accountName})\n${call.callDate} · Duration: ${formatDurationLabel(call.durationSec)}\n\n`;
+  const body = call.transcript
+    .map(
+      (seg) =>
+        `[${formatTimestamp(seg.startSec)}] ${seg.speaker} (${seg.speakerLabel}): ${seg.text}${
+          seg.coachNote ? `\n  Coach Note: ${seg.coachNote}` : ''
+        }`
+    )
+    .join('\n\n');
+  return header + body;
 }
