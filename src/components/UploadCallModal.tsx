@@ -1,5 +1,6 @@
 import { FileAudio, FileText, Loader2, Mic, Square, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { getTranslations, type Locale } from '../i18n/translations';
 import type { CallStage, CoachingMethodology, SalesCallRecord } from '../types/call';
 import {
   formatTimestamp,
@@ -10,6 +11,7 @@ import {
 interface UploadCallModalProps {
   isOpen: boolean;
   initialMode: 'upload' | 'record' | 'transcript';
+  locale: Locale;
   onClose: () => void;
   onCallAnalyzed: (call: SalesCallRecord) => void;
 }
@@ -61,9 +63,11 @@ interface SpeechRecognitionLike {
 export function UploadCallModal({
   isOpen,
   initialMode,
+  locale,
   onClose,
   onCallAnalyzed,
 }: UploadCallModalProps) {
+  const t = getTranslations(locale);
   const [mode, setMode] = useState<'upload' | 'record' | 'transcript'>(initialMode);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadTranscript, setUploadTranscript] = useState('');
@@ -309,7 +313,7 @@ export function UploadCallModal({
           const rec = new SpeechRecCtor();
           rec.continuous = true;
           rec.interimResults = false;
-          rec.lang = navigator.language || 'en-US';
+          rec.lang = locale === 'zh' ? 'zh-CN' : navigator.language || 'en-US';
           rec.onresult = (evt) => {
             let chunk = '';
             for (let i = evt.resultIndex; i < evt.results.length; i++) {
@@ -376,7 +380,11 @@ export function UploadCallModal({
 
     if (mode === 'upload') {
       if (!selectedFile) {
-        setErrorMessage('Please select or drop an audio file before analyzing.');
+        setErrorMessage(
+          locale === 'zh'
+            ? '请先选择或拖拽上传一个音频文件。'
+            : 'Please select or drop an audio file before analyzing.'
+        );
         return;
       }
       const check = validateAudioFile({
@@ -391,7 +399,9 @@ export function UploadCallModal({
 
       if (capabilities && !capabilities.audioTranscription && !uploadTranscript.trim()) {
         setErrorMessage(
-          'No cloud audio transcription key is configured. Paste the call text below to sync with your audio file, or switch to Paste Text.'
+          locale === 'zh'
+            ? '当前未配置云端语音转写密钥，请在下方填写配套对话文本（或切换到“粘贴文本”模式）。'
+            : 'No cloud audio transcription key is configured. Paste the call text below to sync with your audio file, or switch to Paste Text.'
         );
         return;
       }
@@ -399,8 +409,8 @@ export function UploadCallModal({
       setIsAnalyzing(true);
       setStatusMessage(
         capabilities?.audioTranscription
-          ? `Transcribing audio and scoring via ${methodology}...`
-          : `Analyzing call audio + transcript via ${capabilities?.providerLabel || 'Local Engine'}...`
+          ? `${t.analyzingCall} (${methodology})`
+          : `${t.analyzingCall} (${capabilities?.providerLabel || t.engineLocalOption})`
       );
 
       try {
@@ -448,7 +458,7 @@ export function UploadCallModal({
       }
 
       setIsAnalyzing(true);
-      setStatusMessage(`Generating diarization, sentiment timeline, and ${methodology} coaching card...`);
+      setStatusMessage(`${t.analyzingCall} (${methodology})`);
 
       try {
         const response = await fetch('/api/analyze-call', {
@@ -487,12 +497,16 @@ export function UploadCallModal({
 
     // Microphone mode
     if (!transcribedText.trim() && !recordedBlob) {
-      setErrorMessage('Record audio from your microphone or paste a transcript to analyze.');
+      setErrorMessage(
+        locale === 'zh'
+          ? '请先使用麦克风录音或输入对话文本后再分析。'
+          : 'Record audio from your microphone or paste a transcript to analyze.'
+      );
       return;
     }
 
     setIsAnalyzing(true);
-    setStatusMessage(`Analyzing diarization, engagement sentiment, and ${methodology} coaching card...`);
+    setStatusMessage(`${t.analyzingCall} (${methodology})`);
 
     try {
       let response: Response;
@@ -565,17 +579,17 @@ export function UploadCallModal({
               id="upload-call-modal-title"
               className="font-display text-base font-semibold text-slate-900"
             >
-              Ingest Sales Call
+              {t.ingestModalTitle}
             </h2>
             <p className="text-xs text-slate-500">
-              Upload audio, record via microphone, or paste a transcript for AI coaching intelligence.
+              {t.ingestModalSubtitle}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isAnalyzing}
-            aria-label="Close modal"
+            aria-label={t.closeModalAria}
             className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             <X className="w-5 h-5" />
@@ -598,7 +612,7 @@ export function UploadCallModal({
               }`}
             >
               <Upload className="w-3.5 h-3.5 shrink-0" />
-              <span>Upload Audio</span>
+              <span>{t.tabUpload}</span>
             </button>
             <button
               type="button"
@@ -613,7 +627,7 @@ export function UploadCallModal({
               }`}
             >
               <Mic className="w-3.5 h-3.5 shrink-0" />
-              <span>Microphone</span>
+              <span>{t.tabMicrophone}</span>
             </button>
             <button
               type="button"
@@ -628,7 +642,7 @@ export function UploadCallModal({
               }`}
             >
               <FileText className="w-3.5 h-3.5 shrink-0" />
-              <span>Paste Text</span>
+              <span>{t.tabPasteText}</span>
             </button>
           </div>
 
@@ -667,23 +681,23 @@ export function UploadCallModal({
                       onClick={() => fileInputRef.current?.click()}
                       className="mt-2 text-xs font-medium text-blue-700 hover:underline"
                     >
-                      Choose a different file
+                      {t.chooseDifferentFile}
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-slate-800">
-                      Drag and drop a sales call recording here
+                      {t.dragDropAudio}
                     </p>
                     <p className="text-xs text-slate-500">
-                      MP3, WAV, M4A, WebM, OGG, AAC, or FLAC up to 25 MB
+                      {t.audioFormatsHint}
                     </p>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-xs font-medium text-slate-800 hover:bg-slate-50"
                     >
-                      Browse Audio Files
+                      {t.browseAudioFiles}
                     </button>
                   </div>
                 )}
@@ -695,14 +709,14 @@ export function UploadCallModal({
                     htmlFor="upload-accompanying-transcript"
                     className="block text-xs font-medium text-slate-700 mb-1"
                   >
-                    Transcript Text (Zero-Key Local Mode — audio file still saves for playback)
+                    {t.uploadTranscriptLabel}
                   </label>
                   <textarea
                     id="upload-accompanying-transcript"
                     rows={3}
                     value={uploadTranscript}
                     onChange={(e) => setUploadTranscript(e.target.value)}
-                    placeholder="Rep: Thanks for joining today...&#10;Prospect: Our team is reviewing options..."
+                    placeholder={t.uploadTranscriptPlaceholder}
                     className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -715,12 +729,12 @@ export function UploadCallModal({
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">
-                    {isRecording ? 'Recording in progress' : 'Microphone Audio Capture'}
+                    {isRecording ? t.recordingInProgress : t.micCaptureTitle}
                   </p>
                   <p className="text-xs text-slate-500">
                     {capabilities?.audioTranscription
-                      ? `Auto-transcribes via ${capabilities.providerLabel}`
-                      : 'Browser speech-to-text + editable notes (Zero-Key Local Mode)'}
+                      ? `${t.autoTranscribesVia} ${capabilities.providerLabel}`
+                      : t.browserSpeechHint}
                   </p>
                 </div>
 
@@ -735,7 +749,7 @@ export function UploadCallModal({
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 whitespace-nowrap"
                     >
                       <Square className="w-3.5 h-3.5 fill-current" />
-                      <span>{capabilities?.audioTranscription ? 'Stop & Transcribe' : 'Stop Recording'}</span>
+                      <span>{capabilities?.audioTranscription ? t.stopAndTranscribe : t.stopRecording}</span>
                     </button>
                   ) : (
                     <button
@@ -745,7 +759,7 @@ export function UploadCallModal({
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-700 text-white text-xs font-medium hover:bg-blue-800 disabled:opacity-50 whitespace-nowrap"
                     >
                       <Mic className="w-3.5 h-3.5" />
-                      <span>{recordedBlob ? 'Re-record' : 'Start Recording'}</span>
+                      <span>{recordedBlob ? t.reRecord : t.startRecording}</span>
                     </button>
                   )}
                 </div>
@@ -768,12 +782,12 @@ export function UploadCallModal({
                     htmlFor="mic-transcript-preview"
                     className="text-xs font-medium text-slate-700"
                   >
-                    Transcribed Call Text (editable before analysis)
+                    {t.micTranscriptLabel}
                   </label>
                   {isTranscribing && (
                     <span className="inline-flex items-center gap-1 text-xs text-blue-700">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Transcribing audio...
+                      {t.transcribingAudio}
                     </span>
                   )}
                 </div>
@@ -782,7 +796,7 @@ export function UploadCallModal({
                   rows={4}
                   value={transcribedText}
                   onChange={(e) => setTranscribedText(e.target.value)}
-                  placeholder="Record with your microphone to auto-transcribe, or edit call dialogue here..."
+                  placeholder={t.micTranscriptPlaceholder}
                   className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -795,14 +809,14 @@ export function UploadCallModal({
                 htmlFor="paste-transcript-input"
                 className="block text-xs font-medium text-slate-700 mb-1.5"
               >
-                Raw Call Transcript
+                {t.rawTranscriptLabel}
               </label>
               <textarea
                 id="paste-transcript-input"
                 rows={5}
                 value={pastedTranscript}
                 onChange={(e) => setPastedTranscript(e.target.value)}
-                placeholder="Paste a call transcript (e.g. Rep: Thanks for joining today... Prospect: We are evaluating Q4 tools...)"
+                placeholder={t.rawTranscriptPlaceholder}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
@@ -812,35 +826,35 @@ export function UploadCallModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label htmlFor="call-title-input" className="block text-xs font-medium text-slate-700 mb-1">
-                Call Title
+                {t.callTitle}
               </label>
               <input
                 id="call-title-input"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Q4 Renewal Discovery"
+                placeholder={t.callTitlePlaceholder}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
 
             <div>
               <label htmlFor="account-name-input" className="block text-xs font-medium text-slate-700 mb-1">
-                Account Name
+                {t.accountName}
               </label>
               <input
                 id="account-name-input"
                 type="text"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
-                placeholder="e.g., Acme Corp"
+                placeholder={t.accountNamePlaceholder}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
 
             <div>
               <label htmlFor="speaker-a-input" className="block text-xs font-medium text-slate-700 mb-1">
-                Speaker A (Salesperson)
+                {t.speakerAField}
               </label>
               <input
                 id="speaker-a-input"
@@ -853,7 +867,7 @@ export function UploadCallModal({
 
             <div>
               <label htmlFor="speaker-b-input" className="block text-xs font-medium text-slate-700 mb-1">
-                Speaker B (Prospect)
+                {t.speakerBField}
               </label>
               <input
                 id="speaker-b-input"
@@ -866,7 +880,7 @@ export function UploadCallModal({
 
             <div>
               <label htmlFor="methodology-select" className="block text-xs font-medium text-slate-700 mb-1">
-                Coaching Methodology
+                {t.coachingMethodology}
               </label>
               <select
                 id="methodology-select"
@@ -884,7 +898,7 @@ export function UploadCallModal({
 
             <div>
               <label htmlFor="call-stage-select" className="block text-xs font-medium text-slate-700 mb-1">
-                Call Stage
+                {t.callStage}
               </label>
               <select
                 id="call-stage-select"
@@ -894,7 +908,7 @@ export function UploadCallModal({
               >
                 {CALL_STAGES.map((stage) => (
                   <option key={stage} value={stage}>
-                    {stage}
+                    {t.callStages[stage]}
                   </option>
                 ))}
               </select>
@@ -904,7 +918,7 @@ export function UploadCallModal({
           {capabilities && capabilities.llmProvider !== 'local' && (
             <div>
               <label htmlFor="analysis-engine-select" className="block text-xs font-medium text-slate-700 mb-1">
-                Analysis Engine
+                {t.analysisEngine}
               </label>
               <select
                 id="analysis-engine-select"
@@ -912,8 +926,10 @@ export function UploadCallModal({
                 onChange={(e) => setAnalysisEngine(e.target.value as 'auto' | 'local')}
                 className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               >
-                <option value="auto">Auto ({capabilities.providerLabel} with local fallback)</option>
-                <option value="local">Local Engine (Zero-Key Instant Analysis)</option>
+                <option value="auto">
+                  {t.engineAutoPrefix} ({capabilities.providerLabel}, {t.engineAutoSuffix})
+                </option>
+                <option value="local">{t.engineLocalOption}</option>
               </select>
             </div>
           )}
@@ -944,7 +960,7 @@ export function UploadCallModal({
               disabled={isAnalyzing}
               className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
-              Cancel
+              {t.cancel}
             </button>
             <button
               type="submit"
@@ -954,10 +970,10 @@ export function UploadCallModal({
               {isAnalyzing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Analyzing Call...</span>
+                  <span>{t.analyzingCall}</span>
                 </>
               ) : (
-                <span>Analyze Sales Call</span>
+                <span>{t.analyzeSalesCall}</span>
               )}
             </button>
           </div>

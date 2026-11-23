@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { getTranslations, type Locale } from '../i18n/translations';
 import type { SentimentPoint, TranscriptSegment } from '../types/call';
 import {
   computeConversationMetrics,
@@ -12,6 +13,7 @@ interface SentimentGraphProps {
   transcript: TranscriptSegment[];
   durationSec: number;
   currentTimeSec: number;
+  locale: Locale;
   onSeek: (timeSec: number) => void;
 }
 
@@ -48,11 +50,13 @@ export function SentimentGraph({
   transcript,
   durationSec,
   currentTimeSec,
+  locale,
   onSeek,
 }: SentimentGraphProps) {
   const [showProspectLine, setShowProspectLine] = useState(true);
   const [showRepEnergyLine, setShowRepEnergyLine] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const t = getTranslations(locale);
 
   const summary = useMemo(() => computeEngagementSummary(timeline), [timeline]);
   const convMetrics = useMemo(() => computeConversationMetrics(transcript), [transcript]);
@@ -110,39 +114,39 @@ export function SentimentGraph({
 
   return (
     <section
-      aria-label="Sentiment and engagement graph"
+      aria-label={t.sentimentGraphAria}
       data-testid="sentiment-graph-section"
       className="bg-white border border-slate-200 rounded-xl p-5"
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="font-display text-base font-semibold text-slate-900">
-            Sentiment &amp; Engagement Graph
+            {t.sentimentGraphTitle}
           </h2>
           <p className="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span>
-              Avg Engagement{' '}
+              {t.avgEngagement}{' '}
               <span className="font-mono tabular-nums font-medium text-slate-800">
                 {summary.averageEngagement}%
               </span>
             </span>
             <span aria-hidden="true">·</span>
             <span>
-              Prospect Sentiment{' '}
+              {t.prospectSentiment}{' '}
               <span className="font-mono tabular-nums font-medium text-slate-800">
                 {summary.averageProspectSentiment}%
               </span>
             </span>
             <span aria-hidden="true">·</span>
             <span>
-              Rep Questions{' '}
+              {t.repQuestions}{' '}
               <span className="font-mono tabular-nums font-medium text-slate-800">
                 {convMetrics.repQuestionsCount}
               </span>
             </span>
             <span aria-hidden="true">·</span>
             <span>
-              Longest Monologue{' '}
+              {t.longestMonologue}{' '}
               <span className="font-mono tabular-nums font-medium text-slate-800">
                 {formatDurationLabel(convMetrics.longestRepMonologueSec)}
               </span>
@@ -151,11 +155,11 @@ export function SentimentGraph({
               <>
                 <span aria-hidden="true">·</span>
                 <span>
-                  Peak{' '}
+                  {t.peak}{' '}
                   <span className="font-mono tabular-nums font-medium text-emerald-700">
                     {summary.peakPoint.engagement}%
                   </span>{' '}
-                  at {formatTimestamp(summary.peakPoint.timeSec)}
+                  {t.atTime} {formatTimestamp(summary.peakPoint.timeSec)}
                 </span>
               </>
             )}
@@ -165,7 +169,7 @@ export function SentimentGraph({
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-700 font-medium whitespace-nowrap">
             <span className="w-3 h-0.5 bg-blue-700 inline-block" aria-hidden="true" />
-            Engagement
+            {t.engagement}
           </span>
           <button
             type="button"
@@ -181,7 +185,7 @@ export function SentimentGraph({
               className={`w-3 h-0.5 inline-block ${showProspectLine ? 'bg-emerald-600' : 'bg-slate-300'}`}
               aria-hidden="true"
             />
-            Prospect Sentiment
+            {t.prospectSentiment}
           </button>
           <button
             type="button"
@@ -197,21 +201,21 @@ export function SentimentGraph({
               className={`w-3 h-0.5 inline-block ${showRepEnergyLine ? 'bg-amber-600' : 'bg-slate-300'}`}
               aria-hidden="true"
             />
-            Rep Energy
+            {t.repEnergy}
           </button>
         </div>
       </div>
 
       {timeline.length === 0 ? (
         <div className="h-56 flex items-center justify-center border border-dashed border-slate-200 rounded-lg text-sm text-slate-500">
-          No engagement timeline data available for this call.
+          {t.noTimelineData}
         </div>
       ) : (
         <div className="relative">
           <svg
             viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
             role="img"
-            aria-label="Engagement and prospect sentiment over call duration"
+            aria-label={t.sentimentChartAria}
             data-testid="sentiment-chart-svg"
             className="w-full h-auto overflow-visible select-none"
           >
@@ -362,16 +366,16 @@ export function SentimentGraph({
                 )}
               </div>
               <div className="flex items-center gap-4 font-mono tabular-nums">
-                <span>Engagement: {activePoint.engagement}%</span>
-                <span>Prospect: {activePoint.prospectSentiment}%</span>
-                <span>Rep Energy: {activePoint.repEnergy}%</span>
+                <span>{t.tooltipEngagement}: {activePoint.engagement}%</span>
+                <span>{t.tooltipProspect}: {activePoint.prospectSentiment}%</span>
+                <span>{t.tooltipRepEnergy}: {activePoint.repEnergy}%</span>
               </div>
             </div>
           )}
 
           {milestones.length > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-slate-500 mr-1">Key moments:</span>
+              <span className="text-xs font-medium text-slate-500 mr-1">{t.keyMoments}</span>
               {milestones.map((m, idx) => {
                 const toneClass =
                   m.milestoneType === 'objection' || m.milestoneType === 'dip'

@@ -1,4 +1,5 @@
 import { Pause, Play, RotateCcw } from 'lucide-react';
+import { getTranslations, type Locale } from '../i18n/translations';
 import type { SalesCallRecord } from '../types/call';
 import { computeTalkRatio, formatTimestamp } from '../utils/callAnalytics';
 
@@ -7,6 +8,7 @@ interface AudioPlayerBarProps {
   currentTimeSec: number;
   isPlaying: boolean;
   playbackRate: number;
+  locale: Locale;
   onTogglePlay: () => void;
   onSeek: (timeSec: number) => void;
   onChangePlaybackRate: (rate: number) => void;
@@ -19,6 +21,7 @@ export function AudioPlayerBar({
   currentTimeSec,
   isPlaying,
   playbackRate,
+  locale,
   onTogglePlay,
   onSeek,
   onChangePlaybackRate,
@@ -26,10 +29,11 @@ export function AudioPlayerBar({
   const talkRatio = computeTalkRatio(call.transcript);
   const progressPercent =
     call.durationSec > 0 ? Math.min(100, Math.max(0, (currentTimeSec / call.durationSec) * 100)) : 0;
+  const t = getTranslations(locale);
 
   return (
     <section
-      aria-label="Call playback and talk ratio"
+      aria-label={t.playbackTalkRatioAria}
       className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 sm:px-5"
     >
       <div className="flex flex-col md:flex-row md:items-center gap-4">
@@ -38,7 +42,7 @@ export function AudioPlayerBar({
           <button
             type="button"
             onClick={onTogglePlay}
-            aria-label={isPlaying ? 'Pause call playback' : 'Play call playback'}
+            aria-label={isPlaying ? t.pauseAria : t.playAria}
             className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
@@ -47,7 +51,7 @@ export function AudioPlayerBar({
           <button
             type="button"
             onClick={() => onSeek(Math.max(0, currentTimeSec - 15))}
-            aria-label="Rewind 15 seconds"
+            aria-label={t.rewindAria}
             className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             <RotateCcw className="w-4 h-4" />
@@ -60,7 +64,7 @@ export function AudioPlayerBar({
 
             <div className="relative flex-1 flex items-center">
               <label htmlFor="call-timeline-scrubber" className="sr-only">
-                Call timeline position
+                {t.timelineScrubberAria}
               </label>
               <input
                 id="call-timeline-scrubber"
@@ -104,19 +108,19 @@ export function AudioPlayerBar({
 
         {/* Talk Ratio Meter */}
         <div className="md:w-72 md:pl-5 md:border-l md:border-slate-200 shrink-0">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-slate-600 font-medium">
-              Speaker A <span className="font-mono tabular-nums text-slate-900">{talkRatio.speakerAPercent}%</span>
+          <div className="flex items-center justify-between text-xs mb-1.5 gap-2">
+            <span className="text-slate-600 font-medium whitespace-nowrap">
+              {t.speakerA} <span className="font-mono tabular-nums text-slate-900">{talkRatio.speakerAPercent}%</span>
             </span>
-            <span className="text-slate-500">Talk Ratio</span>
-            <span className="text-slate-600 font-medium">
-              Speaker B <span className="font-mono tabular-nums text-slate-900">{talkRatio.speakerBPercent}%</span>
+            <span className="text-slate-500 whitespace-nowrap">{t.talkRatio}</span>
+            <span className="text-slate-600 font-medium whitespace-nowrap">
+              {t.speakerB} <span className="font-mono tabular-nums text-slate-900">{talkRatio.speakerBPercent}%</span>
             </span>
           </div>
           <div
             className="h-2 w-full rounded-full bg-slate-100 overflow-hidden flex"
             role="img"
-            aria-label={`Talk ratio: Speaker A ${talkRatio.speakerAPercent} percent, Speaker B ${talkRatio.speakerBPercent} percent`}
+            aria-label={`${t.talkRatio}: ${t.speakerA} ${talkRatio.speakerAPercent}%, ${t.speakerB} ${talkRatio.speakerBPercent}%`}
           >
             <div
               style={{ width: `${talkRatio.speakerAPercent}%` }}

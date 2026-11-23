@@ -594,14 +594,35 @@ export function analyzeTranscriptLocally(
   };
 }
 
-export function generateLocalCoachReply(call: SalesCallRecord, question: string): string {
+export function generateLocalCoachReply(
+  call: SalesCallRecord,
+  question: string,
+  locale: 'en' | 'zh' = 'en'
+): string {
   const q = question.toLowerCase();
   const talkRatio = computeTalkRatio(call.transcript);
   const topStrength = call.coaching.strengths[0];
   const topGap = call.coaching.missedOpportunities[0];
   const secondGap = call.coaching.missedOpportunities[1];
+  const isZh = locale === 'zh' || /[\u4e00-\u9fff]/.test(question);
 
   if (q.includes('email') || q.includes('follow-up') || q.includes('follow up') || q.includes('邮件')) {
+    if (isZh) {
+      return [
+        `主题：沟通复盘与下一步安排 — ${call.title}（${call.accountName}）`,
+        '',
+        `您好 ${call.speakerBRole.split('(')[0].trim()}：`,
+        '',
+        `感谢今天抽出时间深入沟通。结合您提到的关注点（“${topGap?.evidenceQuote || call.coaching.nextStepRecommendation}”），以下是本次沟通的核心摘要：`,
+        `• 核心对齐点：${topStrength?.title || '业务流程协同与可量化收益'}`,
+        `• 待联合确认事项：${topGap?.detail || '明确决策评估标准与上线节奏。'}`,
+        '',
+        `建议下一步：${call.coaching.nextStepRecommendation}`,
+        '',
+        `祝好，`,
+        `${call.speakerARole.split('(')[0].trim()}`,
+      ].join('\n');
+    }
     return [
       `Subject: Recap & next steps — ${call.title} (${call.accountName})`,
       '',
@@ -620,15 +641,35 @@ export function generateLocalCoachReply(call: SalesCallRecord, question: string)
 
   if (q.includes('rebuttal') || q.includes('objection') || q.includes('话术') || q.includes('异议')) {
     const quote = topGap?.evidenceQuote || 'your current constraints';
+    if (isZh) {
+      return `建议的 2 句话异议应对话术（基于通话原话）：\n\n“我理解您对‘${quote}’的顾虑——这正是很多团队在评估时不只看单项报价，而是先测算人工耗时与风险成本的原因。如果在${call.callStage || '下一阶段评审'}前我们先帮您量化这块收益，是否方便约关键决策同事一起做一次 15 分钟对齐？”`;
+    }
     return `Suggested 2-sentence rebuttal grounded in the call:\n\n"I hear your point around '${quote}'—that is exactly why teams evaluate measurable time and risk savings rather than line-item cost alone. If we quantify the impact before ${call.callStage || 'next review'}, would it make sense to bring the key stakeholder into a 15-minute alignment check?"`;
   }
 
   if (q.includes('question') || q.includes('discovery') || q.includes('问题')) {
+    if (isZh) {
+      return [
+        `针对 ${call.accountName} 下次通话的 3 个 ${call.methodology || 'B2B'} 探索性问题：`,
+        `1. 量化价值锚点：“您之前提到‘${topGap?.evidenceQuote || '当前流程瓶颈'}’——这个问题目前每周大约消耗团队多少工时或预算成本？”`,
+        `2. 决策流程验证（结合 ${formatTimestamp(secondGap?.timestampSec ?? 0)} 上下文）：“除了今天参会的同事外，最终立项还需要哪些部门或负责人签字？他们最看重哪项指标？”`,
+        `3. 风险消解确认：“在接下来的验证阶段，需要看到哪一项具体结果，您的团队才能放心按计划推进？”`,
+      ].join('\n');
+    }
     return [
       `3 ${call.methodology || 'B2B'} discovery questions for your next call with ${call.accountName}:`,
       `1. Metric anchor: "You mentioned '${topGap?.evidenceQuote || 'this workflow challenge'}' — how many hours or dollars per quarter does that cost your team today?"`,
       `2. Decision process (${formatTimestamp(secondGap?.timestampSec ?? 0)} context): "Outside of our call today, who else needs to sign off before rollout, and what criteria matter most to them?"`,
       `3. Risk reversal: "What would need to be proven in a pilot or review for your team to feel confident moving forward on schedule?"`,
+    ].join('\n');
+  }
+
+  if (isZh) {
+    return [
+      `本地教练复盘摘要（${call.methodology || 'General B2B'} · 发言占比 ${talkRatio.speakerAPercent}% / ${talkRatio.speakerBPercent}%）：`,
+      `• 核心亮点：${topStrength?.title}（位于 ${formatTimestamp(topStrength?.timestampSec ?? 0)}）`,
+      `• 优先改进：${topGap?.title} — ${topGap?.detail}`,
+      `• 建议行动：${call.coaching.nextStepRecommendation}`,
     ].join('\n');
   }
 

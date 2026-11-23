@@ -9,7 +9,8 @@ import { TeamOverview } from './components/TeamOverview';
 import { TopHeader } from './components/TopHeader';
 import { UploadCallModal } from './components/UploadCallModal';
 import { SAMPLE_CALLS } from './data/sampleCalls';
-import type { SalesCallRecord } from './types/call';
+import { getTranslations, LOCALE_STORAGE_KEY, type Locale } from './i18n/translations';
+import type { CallStage, SalesCallRecord } from './types/call';
 import {
   formatCoachingBriefMarkdown,
   formatDurationLabel,
@@ -18,6 +19,15 @@ import {
 } from './utils/callAnalytics';
 
 export default function App() {
+  const [locale, setLocale] = useState<Locale>(() => {
+    try {
+      return window.localStorage.getItem(LOCALE_STORAGE_KEY) === 'zh' ? 'zh' : 'en';
+    } catch {
+      return 'en';
+    }
+  });
+  const t = getTranslations(locale);
+
   const [calls, setCalls] = useState<SalesCallRecord[]>(SAMPLE_CALLS);
   const [activeCallId, setActiveCallId] = useState<string>(SAMPLE_CALLS[0].id);
   const [activeView, setActiveView] = useState<'call' | 'overview'>('call');
@@ -40,6 +50,19 @@ export default function App() {
   const [draftSpeakerB, setDraftSpeakerB] = useState<string>('');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // ignore storage errors
+    }
+    document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
+  }, [locale]);
+
+  const handleToggleLocale = () => {
+    setLocale((prev) => (prev === 'en' ? 'zh' : 'en'));
+  };
 
   // Hydrate persisted calls from Node.js backend on mount
   useEffect(() => {
@@ -288,12 +311,18 @@ export default function App() {
     setUploadModalOpen(true);
   };
 
+  const localizedStage =
+    activeCall.callStage && activeCall.callStage in t.callStages
+      ? t.callStages[activeCall.callStage as CallStage]
+      : activeCall.callStage;
+
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900">
       <Sidebar
         calls={calls}
         activeCallId={activeCall.id}
         activeView={activeView}
+        locale={locale}
         onChangeView={setActiveView}
         onSelectCall={setActiveCallId}
         onOpenUploadModal={openModal}
@@ -307,6 +336,8 @@ export default function App() {
           activeCall={activeCall}
           activeView={activeView}
           copiedBrief={copiedBrief}
+          locale={locale}
+          onToggleLocale={handleToggleLocale}
           onCopyBrief={() => void handleCopyBrief()}
           onExportFormat={handleExportFormat}
           onOpenUpload={() => openModal('upload')}
@@ -335,6 +366,7 @@ export default function App() {
           {activeView === 'overview' ? (
             <TeamOverview
               calls={calls}
+              locale={locale}
               onSelectCall={(id) => {
                 setActiveCallId(id);
                 setActiveView('call');
@@ -357,15 +389,15 @@ export default function App() {
                       <span className="font-mono tabular-nums">
                         {formatDurationLabel(activeCall.durationSec)}
                       </span>
-                      {activeCall.callStage && (
+                      {localizedStage && (
                         <>
                           <span className="text-slate-300" aria-hidden="true">·</span>
-                          <span>{activeCall.callStage}</span>
+                          <span>{localizedStage}</span>
                         </>
                       )}
                       <span className="text-slate-300" aria-hidden="true">·</span>
                       <span>
-                        {activeCall.speakerARole} vs {activeCall.speakerBRole}
+                        {activeCall.speakerARole} {t.vs} {activeCall.speakerBRole}
                       </span>
                     </p>
                   </div>
@@ -377,7 +409,7 @@ export default function App() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0 self-start"
                     >
                       <Pencil className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Edit Roles</span>
+                      <span>{t.editRoles}</span>
                     </button>
                   )}
                 </div>
@@ -389,7 +421,7 @@ export default function App() {
                   >
                     <div>
                       <label htmlFor="edit-call-title" className="block text-xs font-medium text-slate-600 mb-1">
-                        Call Title
+                        {t.callTitle}
                       </label>
                       <input
                         id="edit-call-title"
@@ -401,7 +433,7 @@ export default function App() {
                     </div>
                     <div>
                       <label htmlFor="edit-account-name" className="block text-xs font-medium text-slate-600 mb-1">
-                        Account Name
+                        {t.accountName}
                       </label>
                       <input
                         id="edit-account-name"
@@ -413,7 +445,7 @@ export default function App() {
                     </div>
                     <div>
                       <label htmlFor="edit-speaker-a" className="block text-xs font-medium text-slate-600 mb-1">
-                        Speaker A Label
+                        {t.speakerALabel}
                       </label>
                       <input
                         id="edit-speaker-a"
@@ -425,7 +457,7 @@ export default function App() {
                     </div>
                     <div>
                       <label htmlFor="edit-speaker-b" className="block text-xs font-medium text-slate-600 mb-1">
-                        Speaker B Label
+                        {t.speakerBLabel}
                       </label>
                       <input
                         id="edit-speaker-b"
@@ -440,14 +472,14 @@ export default function App() {
                         type="submit"
                         className="px-3 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 whitespace-nowrap"
                       >
-                        Save
+                        {t.save}
                       </button>
                       <button
                         type="button"
                         onClick={() => setIsEditingMeta(false)}
                         className="px-3 py-1.5 rounded-md border border-slate-200 text-xs text-slate-600 hover:bg-slate-50 whitespace-nowrap"
                       >
-                        Cancel
+                        {t.cancel}
                       </button>
                     </div>
                   </form>
@@ -459,6 +491,7 @@ export default function App() {
                 currentTimeSec={currentTimeSec}
                 isPlaying={isPlaying}
                 playbackRate={playbackRate}
+                locale={locale}
                 onTogglePlay={handleTogglePlay}
                 onSeek={handleSeek}
                 onChangePlaybackRate={setPlaybackRate}
@@ -469,6 +502,7 @@ export default function App() {
                 transcript={activeCall.transcript}
                 durationSec={activeCall.durationSec}
                 currentTimeSec={currentTimeSec}
+                locale={locale}
                 onSeek={handleSeek}
               />
 
@@ -480,6 +514,7 @@ export default function App() {
                     speakerARole={activeCall.speakerARole}
                     speakerBRole={activeCall.speakerBRole}
                     currentTimeSec={currentTimeSec}
+                    locale={locale}
                     onSeek={handleSeek}
                     onToggleBookmark={handleToggleBookmark}
                     onSaveCoachNote={handleSaveCoachNote}
@@ -490,6 +525,7 @@ export default function App() {
                   <CoachingCard
                     key={activeCall.id}
                     call={activeCall}
+                    locale={locale}
                     onSeek={handleSeek}
                     onToggleNextStep={handleToggleNextStep}
                   />
@@ -505,6 +541,7 @@ export default function App() {
           key={uploadModalMode}
           isOpen={uploadModalOpen}
           initialMode={uploadModalMode}
+          locale={locale}
           onClose={() => setUploadModalOpen(false)}
           onCallAnalyzed={handleCallAnalyzed}
         />

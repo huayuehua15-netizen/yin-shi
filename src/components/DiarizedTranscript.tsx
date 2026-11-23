@@ -1,5 +1,6 @@
 import { Bookmark, MessageSquarePlus, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { getTranslations, type Locale } from '../i18n/translations';
 import type { SpeakerRole, TranscriptSegment } from '../types/call';
 import {
   filterTranscriptSegments,
@@ -12,6 +13,7 @@ interface DiarizedTranscriptProps {
   speakerARole: string;
   speakerBRole: string;
   currentTimeSec: number;
+  locale: Locale;
   onSeek: (timeSec: number) => void;
   onToggleBookmark: (turnId: string) => void;
   onSaveCoachNote: (turnId: string, note: string) => void;
@@ -22,6 +24,7 @@ export function DiarizedTranscript({
   speakerARole,
   speakerBRole,
   currentTimeSec,
+  locale,
   onSeek,
   onToggleBookmark,
   onSaveCoachNote,
@@ -30,6 +33,7 @@ export function DiarizedTranscript({
   const [searchQuery, setSearchQuery] = useState('');
   const [editingNoteTurnId, setEditingNoteTurnId] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
+  const t = getTranslations(locale);
 
   const activeSegment = useMemo(
     () => findActiveSegmentAtTime(segments, currentTimeSec),
@@ -61,7 +65,7 @@ export function DiarizedTranscript({
 
   return (
     <section
-      aria-label="Diarized call transcript"
+      aria-label={t.diarizedTranscriptAria}
       data-testid="diarized-transcript-section"
       className="bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden"
     >
@@ -69,24 +73,24 @@ export function DiarizedTranscript({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-base font-semibold text-slate-900">
-              Diarized Transcript
+              {t.diarizedTranscriptTitle}
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Speaker A: {speakerARole}
+              {t.speakerA}: {speakerARole}
               <span aria-hidden="true"> · </span>
-              Speaker B: {speakerBRole}
+              {t.speakerB}: {speakerBRole}
             </p>
           </div>
 
           <span className="text-xs font-mono tabular-nums text-slate-500">
-            {filteredSegments.length} of {segments.length} turns
+            {filteredSegments.length} {t.ofWord} {segments.length} {t.turnsCountSuffix}
           </span>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           <div
             role="group"
-            aria-label="Filter transcript by speaker"
+            aria-label={t.filterSpeakerAria}
             className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0 overflow-x-auto"
           >
             {(['all', 'Speaker A', 'Speaker B', 'bookmarked'] as const).map((option) => (
@@ -102,17 +106,19 @@ export function DiarizedTranscript({
                 }`}
               >
                 {option === 'all'
-                  ? 'All Speakers'
+                  ? t.allSpeakers
                   : option === 'bookmarked'
-                    ? `Bookmarked (${bookmarkedCount})`
-                    : option}
+                    ? `${t.bookmarked} (${bookmarkedCount})`
+                    : option === 'Speaker A'
+                      ? t.speakerA
+                      : t.speakerB}
               </button>
             ))}
           </div>
 
           <div className="relative flex-1 min-w-0">
             <label htmlFor="transcript-search" className="sr-only">
-              Search transcript
+              {t.searchTranscriptAria}
             </label>
             <Search
               className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -123,14 +129,14 @@ export function DiarizedTranscript({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search keywords, topics, or notes..."
+              placeholder={t.searchTranscriptPlaceholder}
               className="w-full pl-9 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                aria-label="Clear transcript search"
+                aria-label={t.clearSearchAria}
                 className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-slate-700"
               >
                 <X className="w-3.5 h-3.5" />
@@ -144,10 +150,10 @@ export function DiarizedTranscript({
         {filteredSegments.length === 0 ? (
           <div className="p-10 text-center space-y-2.5">
             <p className="text-sm font-medium text-slate-800">
-              No transcript turns match your current filters.
+              {t.noTranscriptMatches}
             </p>
             <p className="text-xs text-slate-500">
-              Try clearing your search query or switching back to All Speakers.
+              {t.noTranscriptMatchesHint}
             </p>
             {hasFilters && (
               <button
@@ -158,7 +164,7 @@ export function DiarizedTranscript({
                 }}
                 className="mt-1 inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
-                Reset filters
+                {t.resetFilters}
               </button>
             )}
           </div>
@@ -183,7 +189,7 @@ export function DiarizedTranscript({
                         isSpeakerA ? 'text-blue-800' : 'text-emerald-800'
                       }`}
                     >
-                      {seg.speaker}
+                      {isSpeakerA ? t.speakerA : t.speakerB}
                     </span>
                     <span className="text-slate-300" aria-hidden="true">·</span>
                     <span className="text-slate-600 font-medium truncate">
@@ -205,8 +211,8 @@ export function DiarizedTranscript({
                       onClick={() => onToggleBookmark(seg.id)}
                       aria-label={
                         seg.bookmarked
-                          ? `Remove bookmark at ${formatTimestamp(seg.startSec)}`
-                          : `Bookmark turn at ${formatTimestamp(seg.startSec)}`
+                          ? `${t.removeBookmarkAria} ${formatTimestamp(seg.startSec)}`
+                          : `${t.bookmarkTurnAria} ${formatTimestamp(seg.startSec)}`
                       }
                       aria-pressed={Boolean(seg.bookmarked)}
                       className={`inline-flex items-center justify-center w-7 h-7 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
@@ -221,7 +227,7 @@ export function DiarizedTranscript({
                     <button
                       type="button"
                       onClick={() => openNoteEditor(seg)}
-                      aria-label={`Add coach note at ${formatTimestamp(seg.startSec)}`}
+                      aria-label={`${t.addCoachNoteAria} ${formatTimestamp(seg.startSec)}`}
                       className="inline-flex items-center justify-center w-7 h-7 rounded text-slate-400 opacity-70 group-hover:opacity-100 hover:text-slate-700 hover:bg-slate-200/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                     >
                       <MessageSquarePlus className="w-3.5 h-3.5" />
@@ -230,7 +236,7 @@ export function DiarizedTranscript({
                     <button
                       type="button"
                       onClick={() => onSeek(seg.startSec)}
-                      aria-label={`Jump to ${formatTimestamp(seg.startSec)}`}
+                      aria-label={`${t.jumpToAria} ${formatTimestamp(seg.startSec)}`}
                       className={`font-mono tabular-nums text-xs px-2 py-0.5 rounded transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                         isActive
                           ? 'bg-blue-700 text-white font-medium'
@@ -247,7 +253,7 @@ export function DiarizedTranscript({
                 {seg.coachNote && !isEditingNote && (
                   <div className="mt-2 px-3 py-1.5 rounded-md bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 flex items-start justify-between gap-2">
                     <div>
-                      <span className="font-semibold">Coach Note: </span>
+                      <span className="font-semibold">{t.coachNotePrefix}</span>
                       <span>{seg.coachNote}</span>
                     </div>
                     <button
@@ -255,7 +261,7 @@ export function DiarizedTranscript({
                       onClick={() => openNoteEditor(seg)}
                       className="text-amber-800 hover:underline shrink-0"
                     >
-                      Edit
+                      {t.edit}
                     </button>
                   </div>
                 )}
@@ -263,14 +269,14 @@ export function DiarizedTranscript({
                 {isEditingNote && (
                   <div className="mt-2.5 flex items-center gap-2">
                     <label htmlFor={`note-input-${seg.id}`} className="sr-only">
-                      Coach note for {formatTimestamp(seg.startSec)}
+                      {t.coachNoteForPrefix} {formatTimestamp(seg.startSec)}
                     </label>
                     <input
                       id={`note-input-${seg.id}`}
                       type="text"
                       value={draftNote}
                       onChange={(e) => setDraftNote(e.target.value)}
-                      placeholder="Write a manager coaching note..."
+                      placeholder={t.coachNotePlaceholder}
                       className="flex-1 min-w-0 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                     <button
@@ -278,14 +284,14 @@ export function DiarizedTranscript({
                       onClick={() => submitNote(seg.id)}
                       className="px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs font-medium hover:bg-slate-800"
                     >
-                      Save
+                      {t.save}
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingNoteTurnId(null)}
                       className="px-2 py-1.5 rounded-md border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"
                     >
-                      Cancel
+                      {t.cancel}
                     </button>
                   </div>
                 )}

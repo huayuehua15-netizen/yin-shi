@@ -1,25 +1,22 @@
 import { AlertTriangle, Check, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { getTranslations, type Locale } from '../i18n/translations';
 import type { CoachChatMessage, SalesCallRecord } from '../types/call';
 import { formatTimestamp } from '../utils/callAnalytics';
 
 interface CoachingCardProps {
   call: SalesCallRecord;
+  locale: Locale;
   onSeek: (timeSec: number) => void;
   onToggleNextStep: () => void;
 }
 
-const QUICK_PROMPTS = [
-  'Draft a follow-up email addressing the missed opportunities',
-  'Give a 2-sentence objection rebuttal for this call',
-  'List 3 discovery questions to ask next call',
-];
-
-export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardProps) {
+export function CoachingCard({ call, locale, onSeek, onToggleNextStep }: CoachingCardProps) {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<CoachChatMessage[]>([]);
   const [isAsking, setIsAsking] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const t = getTranslations(locale);
 
   const askCoach = async (promptText: string) => {
     const trimmed = promptText.trim();
@@ -39,7 +36,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
       const response = await fetch('/api/coach-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ call, question: trimmed }),
+        body: JSON.stringify({ call, question: trimmed, locale }),
       });
       const data = (await response.json()) as { reply?: string; error?: string };
       if (!response.ok || !data.reply) {
@@ -66,7 +63,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
 
   return (
     <section
-      aria-label="AI coaching card"
+      aria-label={t.coachingCardAria}
       data-testid="coaching-card-section"
       className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-200"
     >
@@ -74,10 +71,10 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
       <div className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <h2 className="font-display text-base font-semibold text-slate-900">
-            AI Coaching Card
+            {t.coachingCardTitle}
           </h2>
           <span className="text-xs text-slate-500">
-            {call.methodology || 'General B2B'} · 3 Strengths · 3 Missed Opportunities
+            {call.methodology || 'General B2B'} · {t.coachingCardMetaSuffix}
           </span>
         </div>
         <p className="text-sm leading-relaxed text-slate-700">{call.coaching.summary}</p>
@@ -88,7 +85,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
         <div className="flex items-center gap-2 mb-3.5">
           <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
           <h3 className="font-display text-sm font-semibold text-slate-900">
-            3 Things Done Well
+            {t.thingsDoneWell}
           </h3>
         </div>
 
@@ -107,7 +104,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
                   onClick={() => onSeek(item.timestampSec)}
                   className="font-mono tabular-nums text-xs text-slate-600 hover:text-blue-700 hover:underline whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded"
                 >
-                  Jump {formatTimestamp(item.timestampSec)}
+                  {t.jump} {formatTimestamp(item.timestampSec)}
                 </button>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed">{item.detail}</p>
@@ -124,7 +121,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
         <div className="flex items-center gap-2 mb-3.5">
           <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
           <h3 className="font-display text-sm font-semibold text-slate-900">
-            3 Missed Opportunities
+            {t.missedOpportunities}
           </h3>
         </div>
 
@@ -143,7 +140,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
                   onClick={() => onSeek(item.timestampSec)}
                   className="font-mono tabular-nums text-xs text-slate-600 hover:text-blue-700 hover:underline whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded"
                 >
-                  Jump {formatTimestamp(item.timestampSec)}
+                  {t.jump} {formatTimestamp(item.timestampSec)}
                 </button>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed">{item.detail}</p>
@@ -159,7 +156,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
       <div className="p-5 bg-slate-50/70">
         <div className="flex items-center justify-between gap-3 mb-2">
           <h3 className="text-xs font-semibold text-slate-500">
-            Recommended Next Step
+            {t.recommendedNextStep}
           </h3>
           <button
             type="button"
@@ -172,7 +169,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
             }`}
           >
             <Check className="w-3.5 h-3.5" />
-            <span>{call.coaching.nextStepCompleted ? 'Completed' : 'Mark Done'}</span>
+            <span>{call.coaching.nextStepCompleted ? t.completed : t.markDone}</span>
           </button>
         </div>
         <p
@@ -188,7 +185,7 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
       <div className="p-5 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-display text-sm font-semibold text-slate-900">
-            Follow-up Coaching
+            {t.followUpCoaching}
           </h3>
           {messages.length > 0 && (
             <button
@@ -196,13 +193,13 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
               onClick={() => setMessages([])}
               className="text-xs text-slate-500 hover:text-slate-800"
             >
-              Clear thread
+              {t.clearThread}
             </button>
           )}
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          {QUICK_PROMPTS.map((prompt) => (
+          {t.quickPrompts.map((prompt) => (
             <button
               key={prompt}
               type="button"
@@ -243,20 +240,20 @@ export function CoachingCard({ call, onSeek, onToggleNextStep }: CoachingCardPro
 
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <label htmlFor="coach-question-input" className="sr-only">
-            Ask the AI coach a follow-up question
+            {t.askCoachAria}
           </label>
           <input
             id="coach-question-input"
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask for a follow-up email or rebuttal..."
+            placeholder={t.askCoachPlaceholder}
             className="flex-1 min-w-0 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
           <button
             type="submit"
             disabled={!question.trim() || isAsking}
-            aria-label="Send coaching question"
+            aria-label={t.sendQuestionAria}
             className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             {isAsking ? (

@@ -1035,10 +1035,12 @@ async function createServer() {
   app.post('/api/coach-chat', async (req, res) => {
     try {
       const capabilities = getProviderCapabilities();
-      const { call, question } = req.body as {
+      const { call, question, locale } = req.body as {
         call?: SalesCallRecord;
         question?: string;
+        locale?: 'en' | 'zh';
       };
+      const resolvedLocale: 'en' | 'zh' = locale === 'zh' ? 'zh' : 'en';
 
       if (!call || !question || !question.trim()) {
         res.status(400).json({ error: 'Call context and coaching question are required.' });
@@ -1046,7 +1048,7 @@ async function createServer() {
       }
 
       if (capabilities.llmProvider === 'local') {
-        res.json({ reply: generateLocalCoachReply(call, question.trim()) });
+        res.json({ reply: generateLocalCoachReply(call, question.trim(), resolvedLocale) });
         return;
       }
 
@@ -1058,7 +1060,7 @@ async function createServer() {
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
           if (msg.includes('503') || msg.includes('UNAVAILABLE')) {
-            res.json({ reply: generateLocalCoachReply(call, question.trim()) });
+            res.json({ reply: generateLocalCoachReply(call, question.trim(), resolvedLocale) });
             return;
           }
           throw err;
@@ -1072,6 +1074,11 @@ async function createServer() {
             `[${Math.floor(seg.startSec / 60)}:${String(seg.startSec % 60).padStart(2, '0')}] ${seg.speaker} (${seg.speakerLabel}): ${seg.text}`
         )
         .join('\n');
+
+      const languageHint =
+        resolvedLocale === 'zh'
+          ? 'Respond in Simplified Chinese (简体中文).'
+          : 'Respond in English.';
 
       try {
         const response = await ai.models.generateContent({
@@ -1091,7 +1098,7 @@ ${transcriptBlock}
 User request: ${question.trim()}`,
           config: {
             systemInstruction:
-              'You are an executive B2B sales coach. Give crisp, practical, evidence-backed advice or follow-up drafts grounded strictly in the provided call transcript. Use clean plain prose with bullet points when helpful.',
+              `You are an executive B2B sales coach. Give crisp, practical, evidence-backed advice or follow-up drafts grounded strictly in the provided call transcript. Use clean plain prose with bullet points when helpful. ${languageHint}`,
           },
         });
 
@@ -1099,7 +1106,7 @@ User request: ${question.trim()}`,
       } catch (err) {
         const msg = err instanceof Error ? err.message : '';
         if (msg.includes('503') || msg.includes('UNAVAILABLE')) {
-          res.json({ reply: generateLocalCoachReply(call, question.trim()) });
+          res.json({ reply: generateLocalCoachReply(call, question.trim(), resolvedLocale) });
           return;
         }
         throw err;
