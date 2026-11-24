@@ -84,13 +84,13 @@ The Express process serves both the API and the production Vite bundle, so a sin
 ```bash
 git clone https://github.com/huayuehua15-netizen/yin-shi.git
 cd yin-shi
-npm install --legacy-peer-deps
+npm install
 npm run dev
 ```
 
 Open <http://localhost:3000>.
 
-> `--legacy-peer-deps` is required because the repository pins `esbuild@^0.25` as a dev dependency while Vite 8 expects `^0.27 || ^0.28`. If you use Bun, `bun install` works with the committed `bun.lock`.
+> Bun users can also run `bun install` with the committed `bun.lock`.
 
 Production build:
 
@@ -153,7 +153,7 @@ The service listens on <http://localhost:3000> and exposes `/api/health`. Record
 ### Any Node.js 20 host
 
 ```bash
-npm install --legacy-peer-deps
+npm install
 npm run build
 PORT=3000 CADENCE_DATA_DIR=/var/lib/cadence npm start
 ```
