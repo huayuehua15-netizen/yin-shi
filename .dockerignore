@@ -6,6 +6,5 @@ data
 .env.*
 !.env.example
 .playwright-cli
-.aistudio
 *.log
 .DS_Store
