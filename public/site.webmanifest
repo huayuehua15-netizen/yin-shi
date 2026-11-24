@@ -1,0 +1,17 @@
+{
+  "name": "Cadence — Sales Call Coaching Intelligence",
+  "short_name": "Cadence",
+  "description": "Sales coaching intelligence platform with speaker-diarized transcripts, sentiment timelines, and AI coaching cards.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

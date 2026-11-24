@@ -60,6 +60,21 @@ Cadence 是一个开源的 **AI 销售通话分析平台**。上传录音、用�
 | **Team overview & exports** | Multi-call library with average talk ratio, engagement, prospect sentiment, recurring topic breakdown, plus Markdown / SRT / TXT exports. |
 | **Bilingual UI** | Instant English / 简体中文 switcher persisted in `localStorage`. |
 | **Zero-key by default** | A deterministic local analyzer keeps every workflow usable without an API key or subscription. |
+| **Keyboard-first workspace** | Shortcut panel (`?`), playback control (`Space`, `←`, `→`), and library navigation (`J` / `K`) with input-aware guards. |
+| **Resilient shell** | React error boundary, JSON API 404s, security headers, immutable asset caching, favicon, PWA manifest, and Open Graph metadata. |
+
+### Keyboard shortcuts
+
+| Key | Action |
+| :---: | :--- |
+| `Space` | Play or pause playback |
+| `←` / `→` | Seek backward / forward 5 seconds |
+| `J` / `K` | Next / previous call in the library |
+| `U` | Open the new call dialog |
+| `?` | Toggle the shortcuts panel |
+| `Esc` | Close dialogs and menus |
+
+Shortcuts are suppressed while typing in a text field, and a floating `?` button in the bottom-right corner opens the same panel.
 
 ## Architecture
 
@@ -170,26 +185,31 @@ Keep `CADENCE_DATA_DIR` on a writable volume: it holds `calls.json` and uploaded
 ├── src/
 │   ├── App.tsx                # Workspace controller
 │   ├── components/            # Sentiment graph, transcript, coaching card, team overview, upload modal
+│   │   ├── ErrorBoundary.tsx  # Top-level render fallback
+│   │   └── ShortcutsModal.tsx # Keyboard shortcut reference panel
 │   ├── data/sampleCalls.ts    # Pre-seeded realistic B2B sales calls
 │   ├── i18n/translations.ts   # English & Simplified Chinese dictionary
 │   ├── types/call.ts          # Shared TypeScript interfaces
-│   └── utils/callAnalytics.ts # Talk ratio, hygiene metrics, overview & export formatters
+│   └── utils/
+│       ├── callAnalytics.ts   # Talk ratio, hygiene metrics, overview & export formatters
+│       └── keyboard.ts        # Shortcut resolution with input/overlay guards
+├── public/                    # Favicon, PWA manifest, robots.txt, Open Graph cover
 ├── docs/                      # Banner and screenshots used by this README
 ├── Dockerfile                 # Container image for self-hosting
 ├── docker-compose.yml         # One-command local / server deployment
-├── .github/workflows/ci.yml   # CI: test, typecheck, build
+├── .github/workflows/ci.yml   # CI: test, typecheck, build, CSS sanity check
 └── metadata.json              # App metadata for AI Studio
 ```
 
 ## Testing & CI
 
 ```bash
-npm test        # Node test runner: analytics, analyzer, store persistence
+npm test        # Node test runner: analytics, analyzer, store persistence, shortcuts
 npm run lint    # tsc --noEmit
 npm run build   # Vite production bundle
 ```
 
-Every push and pull request to `main` runs the same three checks through GitHub Actions.
+Every push and pull request to `main` runs the same checks through GitHub Actions, plus a guard that fails the build if the emitted CSS is empty or missing Tailwind utilities.
 
 ## Contributing
 

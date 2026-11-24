@@ -1,9 +1,10 @@
-import { Pencil } from 'lucide-react';
+import { Keyboard, Pencil } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { CoachingCard } from './components/CoachingCard';
 import { DiarizedTranscript } from './components/DiarizedTranscript';
 import { SentimentGraph } from './components/SentimentGraph';
+import { ShortcutsModal } from './components/ShortcutsModal';
 import { Sidebar } from './components/Sidebar';
 import { TeamOverview } from './components/TeamOverview';
 import { TopHeader } from './components/TopHeader';
@@ -17,6 +18,7 @@ import {
   formatTranscriptSrt,
   formatTranscriptTxt,
 } from './utils/callAnalytics';
+import { resolveShortcut } from './utils/keyboard';
 
 export default function App() {
   const [locale, setLocale] = useState<Locale>(() => {
@@ -41,6 +43,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
 
   // Inline Call Metadata & Speaker Roles Editor
   const [isEditingMeta, setIsEditingMeta] = useState<boolean>(false);
@@ -311,6 +314,53 @@ export default function App() {
     setUploadModalOpen(true);
   };
 
+  // Global keyboard shortcuts: playback, library navigation, and dialogs.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const action = resolveShortcut(event, { overlayOpen: uploadModalOpen || shortcutsOpen });
+      if (!action) return;
+
+      if (action === 'toggle-play' || action === 'seek-backward' || action === 'seek-forward') {
+        event.preventDefault();
+      }
+
+      switch (action) {
+        case 'toggle-play':
+          handleTogglePlay();
+          break;
+        case 'seek-backward':
+          handleSeek(currentTimeSec - 5);
+          break;
+        case 'seek-forward':
+          handleSeek(currentTimeSec + 5);
+          break;
+        case 'next-call':
+        case 'prev-call': {
+          if (calls.length === 0) return;
+          const currentIndex = calls.findIndex((call) => call.id === activeCallId);
+          const delta = action === 'next-call' ? 1 : -1;
+          const nextIndex = (currentIndex + delta + calls.length) % calls.length;
+          setActiveView('call');
+          setActiveCallId(calls[nextIndex].id);
+          break;
+        }
+        case 'open-upload':
+          openModal('upload');
+          break;
+        case 'toggle-shortcuts':
+          setShortcutsOpen((prev) => !prev);
+          break;
+        case 'close-overlay':
+          setUploadModalOpen(false);
+          setShortcutsOpen(false);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeCall, activeCallId, calls, currentTimeSec, uploadModalOpen, shortcutsOpen]);
+
   const localizedStage =
     activeCall.callStage && activeCall.callStage in t.callStages
       ? t.callStages[activeCall.callStage as CallStage]
@@ -545,6 +595,24 @@ export default function App() {
           onClose={() => setUploadModalOpen(false)}
           onCallAnalyzed={handleCallAnalyzed}
         />
+      )}
+
+      <button
+        type="button"
+        onClick={() => setShortcutsOpen(true)}
+        aria-label={t.shortcutsAria}
+        title={t.shortcutsAria}
+        className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/95 border border-slate-200 text-xs font-medium text-slate-600 shadow-lg hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+      >
+        <Keyboard className="w-4 h-4" />
+        <span className="hidden sm:inline">{t.shortcutsHint}</span>
+        <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-mono text-[10px] text-slate-500">
+          ?
+        </kbd>
+      </button>
+
+      {shortcutsOpen && (
+        <ShortcutsModal locale={locale} onClose={() => setShortcutsOpen(false)} />
       )}
     </div>
   );

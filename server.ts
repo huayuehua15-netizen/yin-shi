@@ -676,10 +676,24 @@ async function createServer() {
     limits: { fileSize: 25 * 1024 * 1024 },
   });
 
+  app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)');
+    next();
+  });
+
+  // API responses are dynamic; never let intermediaries cache them.
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   app.use(express.json({ limit: '30mb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true });
+    res.json({ ok: true, uptimeSec: Math.round(process.uptime()) });
   });
 
   app.get('/api/capabilities', (_req, res) => {
@@ -1142,6 +1156,11 @@ User request: ${question.trim()}`,
     }
   );
 
+  // Unknown API routes must return JSON instead of the SPA fallback.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'API route not found.' });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -1151,8 +1170,14 @@ User request: ${question.trim()}`,
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
+    // Hashed build assets are safe to cache for a year.
+    app.use(
+      '/assets',
+      express.static(path.join(distPath, 'assets'), { immutable: true, maxAge: '1y' })
+    );
+    app.use(express.static(distPath, { index: false }));
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

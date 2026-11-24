@@ -35,3 +35,9 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+      - name: Verify production CSS
+        run: |
+          css_file=$(ls dist/assets/*.css | head -n 1)
+          test -s "$css_file"
+          grep -q '\.flex' "$css_file"
