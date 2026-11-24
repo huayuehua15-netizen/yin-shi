@@ -29,9 +29,7 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-950">
             {t.teamOverviewTitle}
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            {t.teamOverviewSubtitle}
-          </p>
+          <p className="mt-1 text-sm text-slate-600">{t.teamOverviewSubtitle}</p>
         </div>
         <button
           type="button"
@@ -59,9 +57,7 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
           <div className="mt-1 font-mono tabular-nums text-2xl font-semibold text-slate-950">
             {overview.avgRepTalkPercent}%
           </div>
-          <div className="mt-0.5 text-xs text-slate-500">
-            {t.targetTalkBalance}
-          </div>
+          <div className="mt-0.5 text-xs text-slate-500">{t.targetTalkBalance}</div>
         </div>
 
         <div className="p-4 sm:p-5">
@@ -121,10 +117,7 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
                   const metrics = computeConversationMetrics(call.transcript);
 
                   return (
-                    <tr
-                      key={call.id}
-                      className="hover:bg-slate-50 transition-colors group"
-                    >
+                    <tr key={call.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="py-3 px-4">
                         <button
                           type="button"
@@ -171,9 +164,7 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
           <h2 className="font-display text-base font-semibold text-slate-900">
             {t.recurringCallTopics}
           </h2>
-          <p className="mt-0.5 text-xs text-slate-500 mb-4">
-            {t.topicSubtitle}
-          </p>
+          <p className="mt-0.5 text-xs text-slate-500 mb-4">{t.topicSubtitle}</p>
 
           {overview.topicDistribution.length === 0 ? (
             <p className="text-sm text-slate-500">{t.noTopicTags}</p>
@@ -184,9 +175,7 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
                 return (
                   <li key={item.topic} className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-800 truncate pr-2">
-                        {item.topic}
-                      </span>
+                      <span className="font-medium text-slate-800 truncate pr-2">{item.topic}</span>
                       <span className="font-mono tabular-nums text-slate-500 shrink-0">
                         {item.count} {item.count === 1 ? t.turnSingular : t.turnPlural}
                       </span>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { getTranslations, type Locale } from '../i18n/translations';
 import type { SentimentPoint, TranscriptSegment } from '../types/call';
 import {
@@ -70,23 +70,29 @@ export function SentimentGraph({
   const plotW = CHART_WIDTH - PAD_LEFT - PAD_RIGHT;
   const plotH = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
 
-  const toX = (timeSec: number) =>
-    PAD_LEFT + (Math.min(effectiveDuration, Math.max(0, timeSec)) / effectiveDuration) * plotW;
-  const toY = (score: number) => PAD_TOP + (1 - Math.min(100, Math.max(0, score)) / 100) * plotH;
+  const toX = useCallback(
+    (timeSec: number) =>
+      PAD_LEFT + (Math.min(effectiveDuration, Math.max(0, timeSec)) / effectiveDuration) * plotW,
+    [effectiveDuration, plotW]
+  );
+  const toY = useCallback(
+    (score: number) => PAD_TOP + (1 - Math.min(100, Math.max(0, score)) / 100) * plotH,
+    [plotH]
+  );
 
   const engagementCoords = useMemo(
     () => timeline.map((pt) => ({ x: toX(pt.timeSec), y: toY(pt.engagement) })),
-    [timeline, effectiveDuration]
+    [timeline, toX, toY]
   );
 
   const prospectCoords = useMemo(
     () => timeline.map((pt) => ({ x: toX(pt.timeSec), y: toY(pt.prospectSentiment) })),
-    [timeline, effectiveDuration]
+    [timeline, toX, toY]
   );
 
   const repEnergyCoords = useMemo(
     () => timeline.map((pt) => ({ x: toX(pt.timeSec), y: toY(pt.repEnergy) })),
-    [timeline, effectiveDuration]
+    [timeline, toX, toY]
   );
 
   const engagementPath = useMemo(() => buildSmoothPath(engagementCoords), [engagementCoords]);
@@ -317,11 +323,7 @@ export function SentimentGraph({
               const isPeakOrCommit =
                 pt.milestoneType === 'peak' || pt.milestoneType === 'commitment';
 
-              const dotStroke = isDipOrObj
-                ? '#B91C1C'
-                : isPeakOrCommit
-                  ? '#15803D'
-                  : '#1D4ED8';
+              const dotStroke = isDipOrObj ? '#B91C1C' : isPeakOrCommit ? '#15803D' : '#1D4ED8';
 
               return (
                 <g key={`${pt.timeSec}-${idx}`}>
@@ -366,9 +368,15 @@ export function SentimentGraph({
                 )}
               </div>
               <div className="flex items-center gap-4 font-mono tabular-nums">
-                <span>{t.tooltipEngagement}: {activePoint.engagement}%</span>
-                <span>{t.tooltipProspect}: {activePoint.prospectSentiment}%</span>
-                <span>{t.tooltipRepEnergy}: {activePoint.repEnergy}%</span>
+                <span>
+                  {t.tooltipEngagement}: {activePoint.engagement}%
+                </span>
+                <span>
+                  {t.tooltipProspect}: {activePoint.prospectSentiment}%
+                </span>
+                <span>
+                  {t.tooltipRepEnergy}: {activePoint.repEnergy}%
+                </span>
               </div>
             </div>
           )}

@@ -38,7 +38,10 @@ export function ShortcutsModal({ locale, onClose }: ShortcutsModalProps) {
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-900 text-white">
               <Keyboard className="w-4 h-4" />
             </span>
-            <h2 id="shortcuts-title" className="font-display text-base font-semibold text-slate-950">
+            <h2
+              id="shortcuts-title"
+              className="font-display text-base font-semibold text-slate-950"
+            >
               {t.shortcutsTitle}
             </h2>
           </div>

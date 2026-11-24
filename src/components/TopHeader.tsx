@@ -53,11 +53,16 @@ export function TopHeader({
           <Menu className="w-5 h-5" />
         </button>
 
-        <nav aria-label={t.breadcrumbAria} className="flex items-center gap-2 text-sm min-w-0 flex-1 overflow-hidden">
+        <nav
+          aria-label={t.breadcrumbAria}
+          className="flex items-center gap-2 text-sm min-w-0 flex-1 overflow-hidden"
+        >
           <span className="hidden sm:inline text-slate-500 whitespace-nowrap shrink-0">
             {t.callIntelligence}
           </span>
-          <span className="hidden sm:inline text-slate-300 shrink-0" aria-hidden="true">/</span>
+          <span className="hidden sm:inline text-slate-300 shrink-0" aria-hidden="true">
+            /
+          </span>
           <span className="font-medium text-slate-900 truncate">
             {activeView === 'overview' ? t.teamOverview : activeCall.title}
           </span>

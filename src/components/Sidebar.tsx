@@ -173,9 +173,7 @@ export function Sidebar({
 
         <nav aria-label={t.salesCallLibraryAria} className="space-y-1">
           {visibleCalls.length === 0 ? (
-            <p className="px-2 py-4 text-xs text-slate-500 text-center">
-              {t.noMatchingCalls}
-            </p>
+            <p className="px-2 py-4 text-xs text-slate-500 text-center">{t.noMatchingCalls}</p>
           ) : (
             visibleCalls.map((call) => {
               const isActive = activeView === 'call' && call.id === activeCallId;
@@ -247,9 +245,7 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="hidden lg:block w-68 shrink-0 h-screen sticky top-0">
-        {sidebarBody}
-      </aside>
+      <aside className="hidden lg:block w-68 shrink-0 h-screen sticky top-0">{sidebarBody}</aside>
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">

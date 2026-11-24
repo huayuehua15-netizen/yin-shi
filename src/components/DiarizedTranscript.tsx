@@ -45,10 +45,7 @@ export function DiarizedTranscript({
     [segments, speakerFilter, searchQuery]
   );
 
-  const bookmarkedCount = useMemo(
-    () => segments.filter((s) => s.bookmarked).length,
-    [segments]
-  );
+  const bookmarkedCount = useMemo(() => segments.filter((s) => s.bookmarked).length, [segments]);
 
   const hasFilters = speakerFilter !== 'all' || searchQuery.trim().length > 0;
 
@@ -149,12 +146,8 @@ export function DiarizedTranscript({
       <div className="divide-y divide-slate-100 max-h-[680px] overflow-y-auto">
         {filteredSegments.length === 0 ? (
           <div className="p-10 text-center space-y-2.5">
-            <p className="text-sm font-medium text-slate-800">
-              {t.noTranscriptMatches}
-            </p>
-            <p className="text-xs text-slate-500">
-              {t.noTranscriptMatchesHint}
-            </p>
+            <p className="text-sm font-medium text-slate-800">{t.noTranscriptMatches}</p>
+            <p className="text-xs text-slate-500">{t.noTranscriptMatchesHint}</p>
             {hasFilters && (
               <button
                 type="button"
@@ -191,13 +184,15 @@ export function DiarizedTranscript({
                     >
                       {isSpeakerA ? t.speakerA : t.speakerB}
                     </span>
-                    <span className="text-slate-300" aria-hidden="true">·</span>
-                    <span className="text-slate-600 font-medium truncate">
-                      {seg.speakerLabel}
+                    <span className="text-slate-300" aria-hidden="true">
+                      ·
                     </span>
+                    <span className="text-slate-600 font-medium truncate">{seg.speakerLabel}</span>
                     {seg.topicTag && (
                       <>
-                        <span className="text-slate-300 hidden sm:inline" aria-hidden="true">·</span>
+                        <span className="text-slate-300 hidden sm:inline" aria-hidden="true">
+                          ·
+                        </span>
                         <span className="text-slate-500 hidden sm:inline truncate">
                           {seg.topicTag}
                         </span>

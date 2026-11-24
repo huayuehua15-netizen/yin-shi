@@ -55,8 +55,22 @@ const sampleSegments: TranscriptSegment[] = [
 
 const sampleTimeline: SentimentPoint[] = [
   { timeSec: 0, engagement: 64, prospectSentiment: 60, repEnergy: 70 },
-  { timeSec: 30, engagement: 52, prospectSentiment: 42, repEnergy: 68, milestoneType: 'objection', label: 'Pricing pushback' },
-  { timeSec: 75, engagement: 88, prospectSentiment: 81, repEnergy: 76, milestoneType: 'peak', label: 'ROI resonance' },
+  {
+    timeSec: 30,
+    engagement: 52,
+    prospectSentiment: 42,
+    repEnergy: 68,
+    milestoneType: 'objection',
+    label: 'Pricing pushback',
+  },
+  {
+    timeSec: 75,
+    engagement: 88,
+    prospectSentiment: 81,
+    repEnergy: 76,
+    milestoneType: 'peak',
+    label: 'ROI resonance',
+  },
 ];
 
 const sampleCall: SalesCallRecord = {
@@ -75,14 +89,44 @@ const sampleCall: SalesCallRecord = {
   coaching: {
     summary: 'Strong recovery after pricing pushback.',
     strengths: [
-      { title: 'Agenda control', detail: 'Aligned upfront.', evidenceQuote: 'Thanks for taking the time', timestampSec: 0 },
-      { title: 'Pain quantification', detail: 'Anchored on Friday hours.', evidenceQuote: 'manual hours your team loses', timestampSec: 62 },
-      { title: 'Active listening', detail: 'Validated concern.', evidenceQuote: 'Understood.', timestampSec: 62 },
+      {
+        title: 'Agenda control',
+        detail: 'Aligned upfront.',
+        evidenceQuote: 'Thanks for taking the time',
+        timestampSec: 0,
+      },
+      {
+        title: 'Pain quantification',
+        detail: 'Anchored on Friday hours.',
+        evidenceQuote: 'manual hours your team loses',
+        timestampSec: 62,
+      },
+      {
+        title: 'Active listening',
+        detail: 'Validated concern.',
+        evidenceQuote: 'Understood.',
+        timestampSec: 62,
+      },
     ],
     missedOpportunities: [
-      { title: 'Budget authority', detail: 'Did not verify CFO sign-off.', evidenceQuote: 'pricing predictability', timestampSec: 21 },
-      { title: 'Competitor check', detail: 'Did not ask alternatives.', evidenceQuote: 'consolidate regional reporting', timestampSec: 21 },
-      { title: 'Timeline urgency', detail: 'Skipped implementation cutoff.', evidenceQuote: 'Q4 renewal goals', timestampSec: 0 },
+      {
+        title: 'Budget authority',
+        detail: 'Did not verify CFO sign-off.',
+        evidenceQuote: 'pricing predictability',
+        timestampSec: 21,
+      },
+      {
+        title: 'Competitor check',
+        detail: 'Did not ask alternatives.',
+        evidenceQuote: 'consolidate regional reporting',
+        timestampSec: 21,
+      },
+      {
+        title: 'Timeline urgency',
+        detail: 'Skipped implementation cutoff.',
+        evidenceQuote: 'Q4 renewal goals',
+        timestampSec: 0,
+      },
     ],
     nextStepRecommendation: 'Send ROI calculator with CFO brief.',
   },
@@ -151,11 +195,17 @@ test('computeLibraryOverview aggregates calls deterministically', () => {
 
 test('validateAudioFile and validateRawTranscript enforce constraints', () => {
   assert.equal(validateAudioFile({ name: 'call.mp3', size: 1024, type: 'audio/mpeg' }).valid, true);
-  assert.equal(validateAudioFile({ name: 'notes.pdf', size: 1024, type: 'application/pdf' }).valid, false);
+  assert.equal(
+    validateAudioFile({ name: 'notes.pdf', size: 1024, type: 'application/pdf' }).valid,
+    false
+  );
   assert.equal(validateAudioFile({ name: 'empty.wav', size: 0, type: 'audio/wav' }).valid, false);
   assert.equal(validateRawTranscript('').valid, false);
   assert.equal(validateRawTranscript('Too short').valid, false);
-  assert.equal(validateRawTranscript('Speaker A: Hi there, thanks for joining today to discuss Q4.').valid, true);
+  assert.equal(
+    validateRawTranscript('Speaker A: Hi there, thanks for joining today to discuss Q4.').valid,
+    true
+  );
 });
 
 test('export formatters generate valid Markdown, SRT, and TXT outputs', () => {

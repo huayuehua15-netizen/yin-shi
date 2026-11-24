@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { api } from '../api/client';
 import { getTranslations, type Locale } from '../i18n/translations';
 import type { CoachChatMessage, SalesCallRecord } from '../types/call';
 import { formatTimestamp } from '../utils/callAnalytics';
@@ -33,20 +34,12 @@ export function CoachingCard({ call, locale, onSeek, onToggleNextStep }: Coachin
     setIsAsking(true);
 
     try {
-      const response = await fetch('/api/coach-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ call, question: trimmed, locale }),
-      });
-      const data = (await response.json()) as { reply?: string; error?: string };
-      if (!response.ok || !data.reply) {
-        throw new Error(data.error || 'Could not generate coaching advice.');
-      }
+      const reply = await api.coachChat(call, trimmed, locale);
 
       const assistantMsg: CoachChatMessage = {
         id: `msg-a-${Date.now()}`,
         role: 'assistant',
-        content: data.reply,
+        content: reply,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
@@ -84,9 +77,7 @@ export function CoachingCard({ call, locale, onSeek, onToggleNextStep }: Coachin
       <div className="p-5">
         <div className="flex items-center gap-2 mb-3.5">
           <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
-          <h3 className="font-display text-sm font-semibold text-slate-900">
-            {t.thingsDoneWell}
-          </h3>
+          <h3 className="font-display text-sm font-semibold text-slate-900">{t.thingsDoneWell}</h3>
         </div>
 
         <ol className="space-y-4">
@@ -130,9 +121,7 @@ export function CoachingCard({ call, locale, onSeek, onToggleNextStep }: Coachin
             <li key={`missed-${idx}`} className="space-y-1.5">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900 leading-snug">
-                  <span className="font-mono tabular-nums text-amber-700 mr-1.5">
-                    0{idx + 1}.
-                  </span>
+                  <span className="font-mono tabular-nums text-amber-700 mr-1.5">0{idx + 1}.</span>
                   {item.title}
                 </p>
                 <button
@@ -155,9 +144,7 @@ export function CoachingCard({ call, locale, onSeek, onToggleNextStep }: Coachin
       {/* Recommended Next Step with persisted completion toggle */}
       <div className="p-5 bg-slate-50/70">
         <div className="flex items-center justify-between gap-3 mb-2">
-          <h3 className="text-xs font-semibold text-slate-500">
-            {t.recommendedNextStep}
-          </h3>
+          <h3 className="text-xs font-semibold text-slate-500">{t.recommendedNextStep}</h3>
           <button
             type="button"
             onClick={onToggleNextStep}
@@ -256,11 +243,7 @@ export function CoachingCard({ call, locale, onSeek, onToggleNextStep }: Coachin
             aria-label={t.sendQuestionAria}
             className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
-            {isAsking ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
+            {isAsking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </form>
       </div>

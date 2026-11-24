@@ -1,5 +1,6 @@
 import { Keyboard, Pencil } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { api } from './api/client';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
 import { CoachingCard } from './components/CoachingCard';
 import { DiarizedTranscript } from './components/DiarizedTranscript';
@@ -11,7 +12,7 @@ import { TopHeader } from './components/TopHeader';
 import { UploadCallModal } from './components/UploadCallModal';
 import { SAMPLE_CALLS } from './data/sampleCalls';
 import { getTranslations, LOCALE_STORAGE_KEY, type Locale } from './i18n/translations';
-import type { CallStage, SalesCallRecord } from './types/call';
+import type { CallRecordPatch, CallStage, SalesCallRecord } from './types/call';
 import {
   formatCoachingBriefMarkdown,
   formatDurationLabel,
@@ -39,7 +40,9 @@ export default function App() {
   const [playbackRate, setPlaybackRate] = useState<number>(1);
 
   const [uploadModalOpen, setUploadModalOpen] = useState<boolean>(false);
-  const [uploadModalMode, setUploadModalMode] = useState<'upload' | 'record' | 'transcript'>('upload');
+  const [uploadModalMode, setUploadModalMode] = useState<'upload' | 'record' | 'transcript'>(
+    'upload'
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -69,25 +72,20 @@ export default function App() {
 
   // Hydrate persisted calls from Node.js backend on mount
   useEffect(() => {
-    let active = true;
-    fetch('/api/calls')
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Failed to load persisted calls');
-        return (await res.json()) as { calls?: SalesCallRecord[] };
-      })
-      .then((data) => {
-        if (!active || !Array.isArray(data.calls) || data.calls.length === 0) return;
-        setCalls(data.calls);
+    const controller = new AbortController();
+    api
+      .listCalls(controller.signal)
+      .then((persisted) => {
+        if (persisted.length === 0) return;
+        setCalls(persisted);
         setActiveCallId((prev) =>
-          data.calls!.some((c) => c.id === prev) ? prev : data.calls![0].id
+          persisted.some((call) => call.id === prev) ? prev : persisted[0].id
         );
       })
       .catch(() => {
-        // Keep initial seeded sample calls if backend unavailable during boot
+        // Keep the seeded sample calls when the backend is unreachable during boot.
       });
-    return () => {
-      active = false;
-    };
+    return () => controller.abort();
   }, []);
 
   const activeCall = useMemo(
@@ -137,20 +135,23 @@ export default function App() {
     }
   }, [isPlaying]);
 
-  const handleSeek = (targetSec: number) => {
-    const clamped = Math.min(activeCall.durationSec, Math.max(0, targetSec));
-    setCurrentTimeSec(clamped);
-    if (activeCall.audioUrl && audioRef.current) {
-      audioRef.current.currentTime = clamped;
-    }
-  };
+  const handleSeek = useCallback(
+    (targetSec: number) => {
+      const clamped = Math.min(activeCall.durationSec, Math.max(0, targetSec));
+      setCurrentTimeSec(clamped);
+      if (activeCall.audioUrl && audioRef.current) {
+        audioRef.current.currentTime = clamped;
+      }
+    },
+    [activeCall.durationSec, activeCall.audioUrl]
+  );
 
-  const handleTogglePlay = () => {
+  const handleTogglePlay = useCallback(() => {
     if (currentTimeSec >= activeCall.durationSec) {
       handleSeek(0);
     }
     setIsPlaying((prev) => !prev);
-  };
+  }, [activeCall.durationSec, currentTimeSec, handleSeek]);
 
   const handleCopyBrief = async () => {
     const markdown = formatCoachingBriefMarkdown(activeCall);
@@ -164,7 +165,7 @@ export default function App() {
   };
 
   const handleExportFormat = (format: 'md' | 'srt' | 'txt') => {
-    let content = '';
+    let content: string;
     let mime = 'text/plain;charset=utf-8';
     if (format === 'md') {
       content = formatCoachingBriefMarkdown(activeCall);
@@ -175,7 +176,10 @@ export default function App() {
       content = formatTranscriptTxt(activeCall);
     }
 
-    const slug = activeCall.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = activeCall.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -187,19 +191,11 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const patchActiveCall = async (payload: Record<string, unknown>) => {
+  const patchActiveCall = async (payload: CallRecordPatch) => {
     setSyncError(null);
     try {
-      const response = await fetch(`/api/calls/${encodeURIComponent(activeCall.id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = (await response.json()) as { call?: SalesCallRecord; error?: string };
-      if (!response.ok || !data.call) {
-        throw new Error(data.error || 'Failed to save changes.');
-      }
-      setCalls((prev) => prev.map((c) => (c.id === data.call!.id ? data.call! : c)));
+      const updated = await api.updateCall(activeCall.id, payload);
+      setCalls((prev) => prev.map((call) => (call.id === updated.id ? updated : call)));
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Unable to persist update.');
     }
@@ -303,9 +299,9 @@ export default function App() {
       return next;
     });
     try {
-      await fetch(`/api/calls/${encodeURIComponent(callId)}`, { method: 'DELETE' });
-    } catch {
-      // ignore offline delete error
+      await api.deleteCall(callId);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Unable to delete this call.');
     }
   };
 
@@ -359,7 +355,16 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeCall, activeCallId, calls, currentTimeSec, uploadModalOpen, shortcutsOpen]);
+  }, [
+    activeCall,
+    activeCallId,
+    calls,
+    currentTimeSec,
+    handleSeek,
+    handleTogglePlay,
+    uploadModalOpen,
+    shortcutsOpen,
+  ]);
 
   const localizedStage =
     activeCall.callStage && activeCall.callStage in t.callStages
@@ -433,19 +438,27 @@ export default function App() {
                     </h1>
                     <p className="mt-1.5 text-sm text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-medium text-slate-800">{activeCall.accountName}</span>
-                      <span className="text-slate-300" aria-hidden="true">·</span>
+                      <span className="text-slate-300" aria-hidden="true">
+                        ·
+                      </span>
                       <span>{activeCall.callDate}</span>
-                      <span className="text-slate-300" aria-hidden="true">·</span>
+                      <span className="text-slate-300" aria-hidden="true">
+                        ·
+                      </span>
                       <span className="font-mono tabular-nums">
                         {formatDurationLabel(activeCall.durationSec)}
                       </span>
                       {localizedStage && (
                         <>
-                          <span className="text-slate-300" aria-hidden="true">·</span>
+                          <span className="text-slate-300" aria-hidden="true">
+                            ·
+                          </span>
                           <span>{localizedStage}</span>
                         </>
                       )}
-                      <span className="text-slate-300" aria-hidden="true">·</span>
+                      <span className="text-slate-300" aria-hidden="true">
+                        ·
+                      </span>
                       <span>
                         {activeCall.speakerARole} {t.vs} {activeCall.speakerBRole}
                       </span>
@@ -470,7 +483,10 @@ export default function App() {
                     className="bg-white border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end"
                   >
                     <div>
-                      <label htmlFor="edit-call-title" className="block text-xs font-medium text-slate-600 mb-1">
+                      <label
+                        htmlFor="edit-call-title"
+                        className="block text-xs font-medium text-slate-600 mb-1"
+                      >
                         {t.callTitle}
                       </label>
                       <input
@@ -482,7 +498,10 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="edit-account-name" className="block text-xs font-medium text-slate-600 mb-1">
+                      <label
+                        htmlFor="edit-account-name"
+                        className="block text-xs font-medium text-slate-600 mb-1"
+                      >
                         {t.accountName}
                       </label>
                       <input
@@ -494,7 +513,10 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="edit-speaker-a" className="block text-xs font-medium text-slate-600 mb-1">
+                      <label
+                        htmlFor="edit-speaker-a"
+                        className="block text-xs font-medium text-slate-600 mb-1"
+                      >
                         {t.speakerALabel}
                       </label>
                       <input
@@ -506,7 +528,10 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="edit-speaker-b" className="block text-xs font-medium text-slate-600 mb-1">
+                      <label
+                        htmlFor="edit-speaker-b"
+                        className="block text-xs font-medium text-slate-600 mb-1"
+                      >
                         {t.speakerBLabel}
                       </label>
                       <input
@@ -611,9 +636,7 @@ export default function App() {
         </kbd>
       </button>
 
-      {shortcutsOpen && (
-        <ShortcutsModal locale={locale} onClose={() => setShortcutsOpen(false)} />
-      )}
+      {shortcutsOpen && <ShortcutsModal locale={locale} onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }

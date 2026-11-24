@@ -28,7 +28,9 @@ export function AudioPlayerBar({
 }: AudioPlayerBarProps) {
   const talkRatio = computeTalkRatio(call.transcript);
   const progressPercent =
-    call.durationSec > 0 ? Math.min(100, Math.max(0, (currentTimeSec / call.durationSec) * 100)) : 0;
+    call.durationSec > 0
+      ? Math.min(100, Math.max(0, (currentTimeSec / call.durationSec) * 100))
+      : 0;
   const t = getTranslations(locale);
 
   return (
@@ -110,11 +112,17 @@ export function AudioPlayerBar({
         <div className="md:w-72 md:pl-5 md:border-l md:border-slate-200 shrink-0">
           <div className="flex items-center justify-between text-xs mb-1.5 gap-2">
             <span className="text-slate-600 font-medium whitespace-nowrap">
-              {t.speakerA} <span className="font-mono tabular-nums text-slate-900">{talkRatio.speakerAPercent}%</span>
+              {t.speakerA}{' '}
+              <span className="font-mono tabular-nums text-slate-900">
+                {talkRatio.speakerAPercent}%
+              </span>
             </span>
             <span className="text-slate-500 whitespace-nowrap">{t.talkRatio}</span>
             <span className="text-slate-600 font-medium whitespace-nowrap">
-              {t.speakerB} <span className="font-mono tabular-nums text-slate-900">{talkRatio.speakerBPercent}%</span>
+              {t.speakerB}{' '}
+              <span className="font-mono tabular-nums text-slate-900">
+                {talkRatio.speakerBPercent}%
+              </span>
             </span>
           </div>
           <div

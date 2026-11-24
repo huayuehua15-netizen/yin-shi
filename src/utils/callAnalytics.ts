@@ -5,7 +5,16 @@ import type {
   TranscriptSegment,
 } from '../types/call';
 
-const SUPPORTED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.webm', '.ogg', '.aac', '.flac', '.mp4'];
+const SUPPORTED_AUDIO_EXTENSIONS = [
+  '.mp3',
+  '.wav',
+  '.m4a',
+  '.webm',
+  '.ogg',
+  '.aac',
+  '.flac',
+  '.mp4',
+];
 const MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
 
 export function formatTimestamp(totalSeconds: number): string {
@@ -295,11 +304,10 @@ export function computeLibraryOverview(calls: SalesCallRecord[]): LibraryOvervie
   };
 }
 
-export function validateAudioFile(file: {
-  name: string;
-  size: number;
-  type: string;
-}): { valid: boolean; error?: string } {
+export function validateAudioFile(file: { name: string; size: number; type: string }): {
+  valid: boolean;
+  error?: string;
+} {
   if (!file || !file.name) {
     return { valid: false, error: 'Please select an audio file to analyze.' };
   }

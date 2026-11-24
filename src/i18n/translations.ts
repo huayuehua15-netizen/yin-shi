@@ -116,7 +116,8 @@ export const TRANSLATIONS = {
     sendQuestionAria: 'Send coaching question',
     // TeamOverview
     teamOverviewTitle: 'Team Call Intelligence Overview',
-    teamOverviewSubtitle: 'Aggregated conversation metrics across all persisted recordings in your library.',
+    teamOverviewSubtitle:
+      'Aggregated conversation metrics across all persisted recordings in your library.',
     analyzeAnotherCall: 'Analyze Another Call',
     callsAnalyzed: 'Calls Analyzed',
     totalSuffix: 'total',

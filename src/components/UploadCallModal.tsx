@@ -1,12 +1,22 @@
 import { FileAudio, FileText, Loader2, Mic, Square, Upload, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { getTranslations, type Locale } from '../i18n/translations';
-import type { CallStage, CoachingMethodology, SalesCallRecord } from '../types/call';
 import {
-  formatTimestamp,
-  validateAudioFile,
-  validateRawTranscript,
-} from '../utils/callAnalytics';
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
+import { api } from '../api/client';
+import { getTranslations, type Locale } from '../i18n/translations';
+import type {
+  CallStage,
+  CoachingMethodology,
+  ProviderCapabilities,
+  SalesCallRecord,
+} from '../types/call';
+import { formatTimestamp, validateAudioFile, validateRawTranscript } from '../utils/callAnalytics';
 
 interface UploadCallModalProps {
   isOpen: boolean;
@@ -29,12 +39,6 @@ const CALL_STAGES: CallStage[] = [
   'Renewal & Expansion',
   'Security & Procurement',
 ];
-
-interface ProviderCapabilities {
-  llmProvider: 'gemini' | 'openai-compatible' | 'local';
-  audioTranscription: boolean;
-  providerLabel: string;
-}
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
@@ -105,29 +109,7 @@ export function UploadCallModal({
   const rafRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      stopRecordingResources();
-      return;
-    }
-    let active = true;
-    fetch('/api/capabilities')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: ProviderCapabilities | null) => {
-        if (active && data) {
-          setCapabilities(data);
-        }
-      })
-      .catch(() => {
-        // Fallback silently if offline
-      });
-    return () => {
-      active = false;
-      stopRecordingResources();
-    };
-  }, [isOpen]);
-
-  const stopRecordingResources = () => {
+  const stopRecordingResources = useCallback(() => {
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
@@ -161,7 +143,29 @@ export function UploadCallModal({
     }
     setIsRecording(false);
     setMicLevel(0);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopRecordingResources();
+      return;
+    }
+    let active = true;
+    const controller = new AbortController();
+    api
+      .capabilities(controller.signal)
+      .then((data) => {
+        if (active) setCapabilities(data);
+      })
+      .catch(() => {
+        // Fallback silently if offline
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      stopRecordingResources();
+    };
+  }, [isOpen, stopRecordingResources]);
 
   if (!isOpen) {
     return null;
@@ -201,15 +205,8 @@ export function UploadCallModal({
       formData.append('speakerARole', speakerARole);
       formData.append('speakerBRole', speakerBRole);
 
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = (await response.json()) as { transcriptText?: string; error?: string };
-      if (!response.ok || !data.transcriptText) {
-        throw new Error(data.error || 'Transcription failed.');
-      }
-      setTranscribedText(data.transcriptText);
+      const transcript = await api.transcribe(formData);
+      setTranscribedText(transcript);
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Unable to transcribe microphone audio.'
@@ -243,7 +240,9 @@ export function UploadCallModal({
           ? 'audio/webm'
           : '';
 
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
@@ -428,16 +427,9 @@ export function UploadCallModal({
         formData.append('sourceType', 'uploaded');
         formData.append('analysisEngine', analysisEngine);
 
-        const response = await fetch('/api/analyze-call', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = (await response.json()) as { call?: SalesCallRecord; error?: string };
-        if (!response.ok || !data.call) {
-          throw new Error(data.error || 'Failed to analyze sales call audio.');
-        }
+        const analyzedCall = await api.analyzeCall(formData);
 
-        onCallAnalyzed(data.call);
+        onCallAnalyzed(analyzedCall);
         onClose();
       } catch (err) {
         setErrorMessage(
@@ -461,33 +453,23 @@ export function UploadCallModal({
       setStatusMessage(`${t.analyzingCall} (${methodology})`);
 
       try {
-        const response = await fetch('/api/analyze-call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rawTranscript: pastedTranscript.trim(),
-            durationSec: Math.max(60, Math.round(pastedTranscript.trim().split(/\s+/).length * 0.45)),
-            title: title.trim() || 'Transcript Coaching Review',
-            accountName: accountName.trim() || 'Prospect Account',
-            speakerARole: speakerARole.trim() || 'Sales Rep',
-            speakerBRole: speakerBRole.trim() || 'Prospect',
-            methodology,
-            callStage,
-            sourceType: 'transcript',
-            analysisEngine,
-          }),
+        const analyzedCall = await api.analyzeCall({
+          rawTranscript: pastedTranscript.trim(),
+          durationSec: Math.max(60, Math.round(pastedTranscript.trim().split(/\s+/).length * 0.45)),
+          title: title.trim() || 'Transcript Coaching Review',
+          accountName: accountName.trim() || 'Prospect Account',
+          speakerARole: speakerARole.trim() || 'Sales Rep',
+          speakerBRole: speakerBRole.trim() || 'Prospect',
+          methodology,
+          callStage,
+          sourceType: 'transcript',
+          analysisEngine,
         });
-        const data = (await response.json()) as { call?: SalesCallRecord; error?: string };
-        if (!response.ok || !data.call) {
-          throw new Error(data.error || 'Failed to analyze transcript.');
-        }
 
-        onCallAnalyzed(data.call);
+        onCallAnalyzed(analyzedCall);
         onClose();
       } catch (err) {
-        setErrorMessage(
-          err instanceof Error ? err.message : 'Unable to analyze transcript.'
-        );
+        setErrorMessage(err instanceof Error ? err.message : 'Unable to analyze transcript.');
       } finally {
         setIsAnalyzing(false);
         setStatusMessage('');
@@ -509,31 +491,9 @@ export function UploadCallModal({
     setStatusMessage(`${t.analyzingCall} (${methodology})`);
 
     try {
-      let response: Response;
-      if (recordedBlob) {
-        const formData = new FormData();
-        formData.append('audio', recordedBlob, 'microphone-recording.webm');
-        if (transcribedText.trim()) {
-          formData.append('rawTranscript', transcribedText.trim());
-        }
-        formData.append('durationSec', String(Math.max(15, recordSeconds)));
-        formData.append('title', title.trim() || 'Live Microphone Coaching Session');
-        formData.append('accountName', accountName.trim() || 'Prospect Account');
-        formData.append('speakerARole', speakerARole.trim() || 'Sales Rep');
-        formData.append('speakerBRole', speakerBRole.trim() || 'Prospect');
-        formData.append('methodology', methodology);
-        formData.append('callStage', callStage);
-        formData.append('sourceType', 'microphone');
-        formData.append('analysisEngine', analysisEngine);
-        response = await fetch('/api/analyze-call', {
-          method: 'POST',
-          body: formData,
-        });
-      } else {
-        response = await fetch('/api/analyze-call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      const analyzedCall = recordedBlob
+        ? await api.analyzeCall(createMicrophoneFormData(recordedBlob))
+        : await api.analyzeCall({
             rawTranscript: transcribedText.trim(),
             durationSec: Math.max(30, recordSeconds || 90),
             title: title.trim() || 'Live Microphone Coaching Session',
@@ -544,16 +504,9 @@ export function UploadCallModal({
             callStage,
             sourceType: 'microphone',
             analysisEngine,
-          }),
-        });
-      }
+          });
 
-      const data = (await response.json()) as { call?: SalesCallRecord; error?: string };
-      if (!response.ok || !data.call) {
-        throw new Error(data.error || 'Failed to analyze recorded call.');
-      }
-
-      onCallAnalyzed(data.call);
+      onCallAnalyzed(analyzedCall);
       onClose();
     } catch (err) {
       setErrorMessage(
@@ -564,6 +517,24 @@ export function UploadCallModal({
       setStatusMessage('');
     }
   };
+
+  function createMicrophoneFormData(blob: Blob): FormData {
+    const formData = new FormData();
+    formData.append('audio', blob, 'microphone-recording.webm');
+    if (transcribedText.trim()) {
+      formData.append('rawTranscript', transcribedText.trim());
+    }
+    formData.append('durationSec', String(Math.max(15, recordSeconds)));
+    formData.append('title', title.trim() || 'Live Microphone Coaching Session');
+    formData.append('accountName', accountName.trim() || 'Prospect Account');
+    formData.append('speakerARole', speakerARole.trim() || 'Sales Rep');
+    formData.append('speakerBRole', speakerBRole.trim() || 'Prospect');
+    formData.append('methodology', methodology);
+    formData.append('callStage', callStage);
+    formData.append('sourceType', 'microphone');
+    formData.append('analysisEngine', analysisEngine);
+    return formData;
+  }
 
   return (
     <div
@@ -581,9 +552,7 @@ export function UploadCallModal({
             >
               {t.ingestModalTitle}
             </h2>
-            <p className="text-xs text-slate-500">
-              {t.ingestModalSubtitle}
-            </p>
+            <p className="text-xs text-slate-500">{t.ingestModalSubtitle}</p>
           </div>
           <button
             type="button"
@@ -686,12 +655,8 @@ export function UploadCallModal({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-slate-800">
-                      {t.dragDropAudio}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {t.audioFormatsHint}
-                    </p>
+                    <p className="text-sm font-medium text-slate-800">{t.dragDropAudio}</p>
+                    <p className="text-xs text-slate-500">{t.audioFormatsHint}</p>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -749,7 +714,9 @@ export function UploadCallModal({
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 whitespace-nowrap"
                     >
                       <Square className="w-3.5 h-3.5 fill-current" />
-                      <span>{capabilities?.audioTranscription ? t.stopAndTranscribe : t.stopRecording}</span>
+                      <span>
+                        {capabilities?.audioTranscription ? t.stopAndTranscribe : t.stopRecording}
+                      </span>
                     </button>
                   ) : (
                     <button
@@ -825,7 +792,10 @@ export function UploadCallModal({
           {/* Call Context & Coaching Framework */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label htmlFor="call-title-input" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="call-title-input"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.callTitle}
               </label>
               <input
@@ -839,7 +809,10 @@ export function UploadCallModal({
             </div>
 
             <div>
-              <label htmlFor="account-name-input" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="account-name-input"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.accountName}
               </label>
               <input
@@ -853,7 +826,10 @@ export function UploadCallModal({
             </div>
 
             <div>
-              <label htmlFor="speaker-a-input" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="speaker-a-input"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.speakerAField}
               </label>
               <input
@@ -866,7 +842,10 @@ export function UploadCallModal({
             </div>
 
             <div>
-              <label htmlFor="speaker-b-input" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="speaker-b-input"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.speakerBField}
               </label>
               <input
@@ -879,7 +858,10 @@ export function UploadCallModal({
             </div>
 
             <div>
-              <label htmlFor="methodology-select" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="methodology-select"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.coachingMethodology}
               </label>
               <select
@@ -897,7 +879,10 @@ export function UploadCallModal({
             </div>
 
             <div>
-              <label htmlFor="call-stage-select" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="call-stage-select"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.callStage}
               </label>
               <select
@@ -917,7 +902,10 @@ export function UploadCallModal({
 
           {capabilities && capabilities.llmProvider !== 'local' && (
             <div>
-              <label htmlFor="analysis-engine-select" className="block text-xs font-medium text-slate-700 mb-1">
+              <label
+                htmlFor="analysis-engine-select"
+                className="block text-xs font-medium text-slate-700 mb-1"
+              >
                 {t.analysisEngine}
               </label>
               <select
