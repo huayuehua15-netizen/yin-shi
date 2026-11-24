@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cadence — social preview</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        width: 1280px;
+        height: 640px;
+        overflow: hidden;
+        background: #0b1220;
+        color: #f8fafc;
+        font-family:
+          'Plus Jakarta Sans',
+          'Segoe UI',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        position: relative;
+      }
+      .grid {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+        background-size: 28px 28px;
+        opacity: 0.55;
+      }
+      .frame {
+        position: absolute;
+        inset: 0;
+        padding: 64px 72px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #2563eb;
+      }
+      h1 {
+        margin-top: 30px;
+        font-size: 74px;
+        line-height: 1.04;
+        letter-spacing: -2.6px;
+        max-width: 780px;
+        font-weight: 700;
+      }
+      h1 em {
+        font-style: normal;
+        color: #60a5fa;
+      }
+      .sub {
+        margin-top: 22px;
+        font-size: 19px;
+        color: #94a3b8;
+        max-width: 560px;
+        line-height: 1.55;
+      }
+      .pills {
+        display: flex;
+        gap: 10px;
+      }
+      .pill {
+        padding: 9px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        font-size: 12px;
+        color: #cbd5e1;
+        letter-spacing: 0.02em;
+      }
+      .pill b {
+        color: #f8fafc;
+        font-weight: 600;
+      }
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        font-size: 12px;
+        color: #64748b;
+        letter-spacing: 0.08em;
+      }
+      .footer strong {
+        color: #e2e8f0;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+      }
+      .chart {
+        position: absolute;
+        right: 72px;
+        top: 96px;
+        width: 380px;
+        height: 250px;
+      }
+      .badge {
+        position: absolute;
+        right: 72px;
+        bottom: 116px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+      .badge span {
+        padding: 7px 12px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid"></div>
+
+    <svg class="chart" viewBox="0 0 380 250" fill="none" aria-hidden="true">
+      <path d="M0 150 H380" stroke="#1e293b" stroke-width="1" />
+      <path d="M0 90 H380" stroke="#1e293b" stroke-width="1" stroke-dasharray="3 6" />
+      <path
+        d="M8 176 C 44 172, 58 128, 92 134 S 142 178, 174 160 S 218 100, 252 108 S 300 60, 372 44"
+        stroke="#60a5fa"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M8 196 C 46 198, 66 166, 100 172 S 148 206, 182 194 S 224 150, 258 158 S 306 124, 372 112"
+        stroke="#34d399"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <circle cx="92" cy="134" r="5" fill="#0b1220" stroke="#60a5fa" stroke-width="2.5" />
+      <circle cx="252" cy="108" r="5" fill="#0b1220" stroke="#60a5fa" stroke-width="2.5" />
+      <circle cx="372" cy="44" r="5" fill="#34d399" />
+      <circle cx="372" cy="112" r="4" fill="#34d399" />
+      <text x="8" y="234" fill="#475569" font-size="10" letter-spacing="1.4">00:00</text>
+      <text x="330" y="234" fill="#475569" font-size="10" letter-spacing="1.4">11:48</text>
+    </svg>
+
+    <div class="frame">
+      <div>
+        <div class="top"><span class="dot"></span> Open source · MIT</div>
+        <h1>Every sales call<br />becomes <em>coaching.</em></h1>
+        <p class="sub">
+          Speaker-diarized transcripts, sentiment timelines and evidence-backed coaching cards —
+          with a zero-key local engine.
+        </p>
+      </div>
+
+      <div class="badge">
+        <span>TypeScript</span><span>React 19</span><span>Express</span><span>Gemini · Ollama</span>
+      </div>
+
+      <div class="footer">
+        <strong>CADENCE</strong>
+        <span>github.com/huayuehua15-netizen/yin-shi</span>
+      </div>
+    </div>
+  </body>
+</html>
