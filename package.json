@@ -1,42 +1,80 @@
 {
-  "name": "cadence-sales-coaching",
+  "name": "cadence",
+  "version": "1.1.0",
   "private": false,
-  "version": "1.0.0",
-  "description": "Open-source AI sales coaching intelligence platform powered by Node.js, React, and Gemini.",
+  "description": "Open-source AI sales coaching intelligence: diarized transcripts, sentiment timelines, and evidence-backed coaching cards.",
   "license": "MIT",
   "type": "module",
+  "author": "huayuehua15-netizen",
+  "homepage": "https://37llsppp9vb45n8fb97.traesite.cn",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huayuehua15-netizen/yin-shi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/huayuehua15-netizen/yin-shi/issues"
+  },
+  "keywords": [
+    "sales-coaching",
+    "speech-analytics",
+    "diarization",
+    "react",
+    "typescript",
+    "express",
+    "gemini",
+    "openai-compatible",
+    "llm"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "NODE_ENV=production tsx server.ts",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit",
-    "test": "tsx --test src/utils/*.test.ts server/*.test.ts"
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && tsc --noEmit",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "tsx --test src/utils/*.test.ts src/api/*.test.ts server/*.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage src/utils/*.test.ts src/api/*.test.ts server/*.test.ts",
+    "verify": "npm run format:check && npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/multer": "^2.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
     "multer": "^2.5.0",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "vite": "^8.3.0"
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^2.3.0",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.21",
+    "cross-env": "^10.1.0",
     "esbuild": "^0.28.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.8",
+    "globals": "^17.14.0",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "prettier": "^3.10.1",
+    "puppeteer-core": "^25.18.1",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.74.0",
+    "vite": "^8.3.0"
   }
 }

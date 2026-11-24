@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/huayuehua15-netizen/yin-shi/security/advisories/new
+    about: Please report vulnerabilities privately instead of opening a public issue.
+  - name: Live demo
+    url: https://37llsppp9vb45n8fb97.traesite.cn
+    about: Try the deployed workspace before filing a UI issue.

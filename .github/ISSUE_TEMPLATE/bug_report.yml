@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible defect in Cadence.
+title: '[bug] '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please include enough detail to reproduce the issue without guessing.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the actual behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the workspace at ...
+        2. Upload a 30-second WAV file ...
+        3. Click "Analyze" ...
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Audio ingestion / transcription
+        - Analysis & coaching output
+        - Transcript, bookmarks, or notes
+        - Team overview & exports
+        - UI / localization / accessibility
+        - API / persistence
+        - Build, CI, or deployment
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, browser, and provider mode (local / Gemini / OpenAI-compatible).
+      placeholder: Windows 11 · Node 22.20 · Chrome 141 · Zero-Key Local
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste server logs, browser console output, or attach screenshots. Remove API keys first.
+      render: shell

@@ -1,14 +1,21 @@
 services:
   cadence:
     build: .
-    container_name: cadence-sales-coaching
+    container_name: cadence
+    init: true
     ports:
-      - "${PORT:-3000}:3000"
+      - '${PORT:-3000}:3000'
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - CADENCE_DATA_DIR=/app/data
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - WHISPER_BASE_URL=${WHISPER_BASE_URL:-}
+      - WHISPER_MODEL=${WHISPER_MODEL:-whisper-1}
+      - CADENCE_PROVIDER=${CADENCE_PROVIDER:-auto}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

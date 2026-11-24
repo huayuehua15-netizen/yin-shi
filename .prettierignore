@@ -1,0 +1,9 @@
+dist
+node_modules
+data
+coverage
+bun.lock
+package-lock.json
+*.log
+docs/*.svg
+docs/*.png
