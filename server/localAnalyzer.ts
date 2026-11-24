@@ -9,7 +9,11 @@ import type {
   SpeakerRole,
   TranscriptSegment,
 } from '../src/types/call';
-import { computeConversationMetrics, computeTalkRatio, formatTimestamp } from '../src/utils/callAnalytics';
+import {
+  computeConversationMetrics,
+  computeTalkRatio,
+  formatTimestamp,
+} from '../src/utils/callAnalytics';
 
 export interface LocalAnalysisMeta {
   title: string;
@@ -195,7 +199,8 @@ function inferSpeakerFromLabel(
     lower === 'agent' ||
     lower === 'host' ||
     lower === '销售' ||
-    (aLower && (lower === aLower || aLower.includes(lower) || lower.includes(aLower.split('(')[0].trim())))
+    (aLower &&
+      (lower === aLower || aLower.includes(lower) || lower.includes(aLower.split('(')[0].trim())))
   ) {
     return 'Speaker A';
   }
@@ -210,7 +215,8 @@ function inferSpeakerFromLabel(
     lower === 'lead' ||
     lower === '客户' ||
     lower === '买家' ||
-    (bLower && (lower === bLower || bLower.includes(lower) || lower.includes(bLower.split('(')[0].trim())))
+    (bLower &&
+      (lower === bLower || bLower.includes(lower) || lower.includes(bLower.split('(')[0].trim())))
   ) {
     return 'Speaker B';
   }
@@ -268,14 +274,13 @@ export function parseRawTranscriptToSegments(
   }
 
   const parsedTurns: RawTurn[] = [];
-  const linePattern =
-    /^(?:\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*)?(?:([^:\n]{1,45}?)\s*[:：]\s+)?(.*)$/;
+  const linePattern = /^(?:\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*)?(?:([^:\n]{1,45}?)\s*[:：]\s+)?(.*)$/;
 
   for (const line of lines) {
     const match = linePattern.exec(line);
     if (!match) continue;
     const [, timeToken, rawSpeaker, body] = match;
-    const explicitTimeSec = timeToken ? parseTimestampToSec(timeToken) ?? undefined : undefined;
+    const explicitTimeSec = timeToken ? (parseTimestampToSec(timeToken) ?? undefined) : undefined;
     const text = (body || '').trim();
     if (!text) continue;
 
@@ -329,10 +334,7 @@ export function parseRawTranscriptToSegments(
   let cursorSec = 0;
   const segments: TranscriptSegment[] = parsedTurns.map((turn, idx) => {
     const words = Math.max(4, turn.text.split(/\s+/).length);
-    const shareSec = Math.max(
-      8,
-      Math.round((words / Math.max(1, totalWords)) * estimatedDuration)
-    );
+    const shareSec = Math.max(8, Math.round((words / Math.max(1, totalWords)) * estimatedDuration));
     const startSec =
       turn.explicitTimeSec !== undefined && turn.explicitTimeSec >= cursorSec
         ? turn.explicitTimeSec
@@ -356,10 +358,7 @@ export function parseRawTranscriptToSegments(
     };
   });
 
-  const finalDurationSec = Math.max(
-    estimatedDuration,
-    segments[segments.length - 1]?.endSec ?? 45
-  );
+  const finalDurationSec = Math.max(estimatedDuration, segments[segments.length - 1]?.endSec ?? 45);
 
   return { durationSec: finalDurationSec, transcript: segments };
 }
@@ -387,16 +386,8 @@ function buildSentimentTimeline(
       20,
       96
     );
-    const repEnergy = clamp(
-      62 + Math.round(wordDensity * 0.55) + (hasQuestion ? 8 : 0),
-      40,
-      96
-    );
-    const engagement = clamp(
-      Math.round(prospectSentiment * 0.55 + repEnergy * 0.45),
-      28,
-      96
-    );
+    const repEnergy = clamp(62 + Math.round(wordDensity * 0.55) + (hasQuestion ? 8 : 0), 40, 96);
+    const engagement = clamp(Math.round(prospectSentiment * 0.55 + repEnergy * 0.45), 28, 96);
 
     const lower = nearest?.text.toLowerCase() ?? '';
     let milestoneType: MilestoneType | undefined;
@@ -470,22 +461,28 @@ export function analyzeTranscriptLocally(
   };
 
   const repQuestionTurn =
-    repTurns.find((t) => t.text.includes('?') || t.text.includes('？')) ?? repTurns[0] ?? fallbackTurn;
+    repTurns.find((t) => t.text.includes('?') || t.text.includes('？')) ??
+    repTurns[0] ??
+    fallbackTurn;
   const quantifiedTurn =
-    transcript.find((t) => QUANTIFIED_PATTERN.test(t.text)) ?? repTurns[Math.min(1, repTurns.length - 1)] ?? fallbackTurn;
+    transcript.find((t) => QUANTIFIED_PATTERN.test(t.text)) ??
+    repTurns[Math.min(1, repTurns.length - 1)] ??
+    fallbackTurn;
   const positiveProspectTurn =
     [...prospectTurns].sort((a, b) => b.sentimentScore - a.sentimentScore)[0] ??
     transcript[transcript.length - 1] ??
     fallbackTurn;
 
   const objectionTurn =
-    prospectTurns.find((t) => OBJECTION_TERMS.some((term) => t.text.toLowerCase().includes(term))) ??
+    prospectTurns.find((t) =>
+      OBJECTION_TERMS.some((term) => t.text.toLowerCase().includes(term))
+    ) ??
     [...prospectTurns].sort((a, b) => a.sentimentScore - b.sentimentScore)[0] ??
     prospectTurns[0] ??
     fallbackTurn;
 
   const longestRepTurn =
-    [...repTurns].sort((a, b) => (b.endSec - b.startSec) - (a.endSec - a.startSec))[0] ??
+    [...repTurns].sort((a, b) => b.endSec - b.startSec - (a.endSec - a.startSec))[0] ??
     repTurns[0] ??
     fallbackTurn;
 
@@ -606,7 +603,12 @@ export function generateLocalCoachReply(
   const secondGap = call.coaching.missedOpportunities[1];
   const isZh = locale === 'zh' || /[\u4e00-\u9fff]/.test(question);
 
-  if (q.includes('email') || q.includes('follow-up') || q.includes('follow up') || q.includes('邮件')) {
+  if (
+    q.includes('email') ||
+    q.includes('follow-up') ||
+    q.includes('follow up') ||
+    q.includes('邮件')
+  ) {
     if (isZh) {
       return [
         `主题：沟通复盘与下一步安排 — ${call.title}（${call.accountName}）`,
@@ -639,7 +641,12 @@ export function generateLocalCoachReply(
     ].join('\n');
   }
 
-  if (q.includes('rebuttal') || q.includes('objection') || q.includes('话术') || q.includes('异议')) {
+  if (
+    q.includes('rebuttal') ||
+    q.includes('objection') ||
+    q.includes('话术') ||
+    q.includes('异议')
+  ) {
     const quote = topGap?.evidenceQuote || 'your current constraints';
     if (isZh) {
       return `建议的 2 句话异议应对话术（基于通话原话）：\n\n“我理解您对‘${quote}’的顾虑——这正是很多团队在评估时不只看单项报价，而是先测算人工耗时与风险成本的原因。如果在${call.callStage || '下一阶段评审'}前我们先帮您量化这块收益，是否方便约关键决策同事一起做一次 15 分钟对齐？”`;

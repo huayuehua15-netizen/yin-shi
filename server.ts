@@ -3,6 +3,7 @@ import express from 'express';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
 import {
@@ -19,7 +20,9 @@ import type {
   CoachingCard,
   CoachingMethodology,
   CoachingPoint,
+  LlmProviderMode,
   MilestoneType,
+  ProviderCapabilities,
   SalesCallRecord,
   SentimentPoint,
   SpeakerRole,
@@ -32,7 +35,17 @@ const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT || 3000);
 
-type LlmProviderMode = 'gemini' | 'openai-compatible' | 'local';
+/** Version reported by `/api/health`; read once at boot from package.json. */
+const APP_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8')) as {
+      version?: string;
+    };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
 
 function hasValidGeminiKey(): boolean {
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -52,11 +65,7 @@ function hasAudioTranscriptionBackend(): boolean {
   return Boolean(whisperUrl || (openaiKey && openaiKey !== 'MY_OPENAI_API_KEY'));
 }
 
-function getProviderCapabilities(): {
-  llmProvider: LlmProviderMode;
-  audioTranscription: boolean;
-  providerLabel: string;
-} {
+function getProviderCapabilities(): ProviderCapabilities {
   const forcedProvider = process.env.CADENCE_PROVIDER?.trim().toLowerCase();
   if (forcedProvider === 'local') {
     return {
@@ -65,7 +74,10 @@ function getProviderCapabilities(): {
       providerLabel: 'Zero-Key Local Engine',
     };
   }
-  if ((forcedProvider === 'auto' || !forcedProvider || forcedProvider === 'gemini') && hasValidGeminiKey()) {
+  if (
+    (forcedProvider === 'auto' || !forcedProvider || forcedProvider === 'gemini') &&
+    hasValidGeminiKey()
+  ) {
     return {
       llmProvider: 'gemini',
       audioTranscription: true,
@@ -98,7 +110,7 @@ function getGeminiClient(): GoogleGenAI {
     apiKey,
     httpOptions: {
       headers: {
-        'User-Agent': 'aistudio-build',
+        'User-Agent': `cadence/${APP_VERSION}`,
       },
     },
   });
@@ -219,7 +231,8 @@ const analysisResponseSchema = {
     },
     sentimentTimeline: {
       type: Type.ARRAY,
-      description: '8 to 14 evenly spaced engagement and sentiment points across the call duration.',
+      description:
+        '8 to 14 evenly spaced engagement and sentiment points across the call duration.',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -238,7 +251,8 @@ const analysisResponseSchema = {
           },
           label: {
             type: Type.STRING,
-            description: 'Optional concise inflection label for peaks, dips, objections, or commitments.',
+            description:
+              'Optional concise inflection label for peaks, dips, objections, or commitments.',
           },
           milestoneType: {
             type: Type.STRING,
@@ -308,9 +322,18 @@ function normalizeCoachingPoints(
   const normalized: CoachingPoint[] = arr.slice(0, 3).map((item, idx) => {
     const obj = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
     return {
-      title: typeof obj.title === 'string' && obj.title.trim() ? obj.title.trim() : `${fallbackTitlePrefix} ${idx + 1}`,
-      detail: typeof obj.detail === 'string' && obj.detail.trim() ? obj.detail.trim() : 'Review this segment for specific phrasing and discovery depth.',
-      evidenceQuote: typeof obj.evidenceQuote === 'string' && obj.evidenceQuote.trim() ? obj.evidenceQuote.trim() : 'No direct quote captured.',
+      title:
+        typeof obj.title === 'string' && obj.title.trim()
+          ? obj.title.trim()
+          : `${fallbackTitlePrefix} ${idx + 1}`,
+      detail:
+        typeof obj.detail === 'string' && obj.detail.trim()
+          ? obj.detail.trim()
+          : 'Review this segment for specific phrasing and discovery depth.',
+      evidenceQuote:
+        typeof obj.evidenceQuote === 'string' && obj.evidenceQuote.trim()
+          ? obj.evidenceQuote.trim()
+          : 'No direct quote captured.',
       timestampSec: Math.round(clampNumber(obj.timestampSec, 0, Math.max(30, fallbackDuration), 0)),
     };
   });
@@ -344,7 +367,8 @@ async function analyzeTranscriptWithGemini(
   sentimentTimeline: SentimentPoint[];
   coaching: CoachingCard;
 }> {
-  const durationHint = meta.durationHintSec && meta.durationHintSec > 0 ? meta.durationHintSec : 120;
+  const durationHint =
+    meta.durationHintSec && meta.durationHintSec > 0 ? meta.durationHintSec : 120;
 
   const prompt = `Analyze the following sales call transcript and return structured sales coaching intelligence evaluated through the ${meta.methodology} framework for a ${meta.callStage} call.
 
@@ -439,9 +463,7 @@ function normalizeParsedAnalysis(
         text: typeof seg.text === 'string' ? seg.text.trim() : '',
         sentimentScore: clampNumber(seg.sentimentScore, -1, 1, 0),
         topicTag:
-          typeof seg.topicTag === 'string' && seg.topicTag.trim()
-            ? seg.topicTag.trim()
-            : undefined,
+          typeof seg.topicTag === 'string' && seg.topicTag.trim() ? seg.topicTag.trim() : undefined,
       };
     })
     .filter((seg) => seg.text.length > 0);
@@ -557,10 +579,14 @@ async function analyzeTranscriptWithOpenAiCompatible(
   sentimentTimeline: SentimentPoint[];
   coaching: CoachingCard;
 }> {
-  const baseUrl = (process.env.LLM_BASE_URL?.trim() || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const baseUrl = (process.env.LLM_BASE_URL?.trim() || 'https://api.openai.com/v1').replace(
+    /\/$/,
+    ''
+  );
   const apiKey = process.env.OPENAI_API_KEY?.trim() || 'ollama';
   const model = process.env.LLM_MODEL?.trim() || 'llama3.1';
-  const durationHint = meta.durationHintSec && meta.durationHintSec > 0 ? meta.durationHintSec : 120;
+  const durationHint =
+    meta.durationHintSec && meta.durationHintSec > 0 ? meta.durationHintSec : 120;
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -597,13 +623,22 @@ async function analyzeTranscriptWithOpenAiCompatible(
   if (!content) {
     throw new Error('LLM endpoint returned an empty response.');
   }
-  const cleanJson = content.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+  const cleanJson = content
+    .replace(/^```json\s*/i, '')
+    .replace(/```$/i, '')
+    .trim();
   const parsed = JSON.parse(cleanJson) as Record<string, unknown>;
   return normalizeParsedAnalysis(parsed, meta, durationHint);
 }
 
-async function coachChatWithOpenAiCompatible(call: SalesCallRecord, question: string): Promise<string> {
-  const baseUrl = (process.env.LLM_BASE_URL?.trim() || 'https://api.openai.com/v1').replace(/\/$/, '');
+async function coachChatWithOpenAiCompatible(
+  call: SalesCallRecord,
+  question: string
+): Promise<string> {
+  const baseUrl = (process.env.LLM_BASE_URL?.trim() || 'https://api.openai.com/v1').replace(
+    /\/$/,
+    ''
+  );
   const apiKey = process.env.OPENAI_API_KEY?.trim() || 'ollama';
   const model = process.env.LLM_MODEL?.trim() || 'llama3.1';
 
@@ -677,10 +712,31 @@ async function createServer() {
   });
 
   app.disable('x-powered-by');
-  app.use((_req, res, next) => {
+  app.use((req, res, next) => {
+    const requestId = req.get('x-request-id') || randomUUID();
+    res.setHeader('X-Request-Id', requestId);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)');
+    next();
+  });
+
+  // Structured request log with latency, excluding routine asset traffic.
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api')) {
+      next();
+      return;
+    }
+    const startedAt = performance.now();
+    res.on('finish', () => {
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      const line = `${req.method} ${req.originalUrl} ${res.statusCode} ${elapsedMs}ms`;
+      if (res.statusCode >= 500) {
+        console.error(line);
+      } else {
+        console.info(line);
+      }
+    });
     next();
   });
 
@@ -693,7 +749,12 @@ async function createServer() {
   app.use(express.json({ limit: '30mb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, uptimeSec: Math.round(process.uptime()) });
+    res.json({
+      ok: true,
+      uptimeSec: Math.round(process.uptime()),
+      version: APP_VERSION,
+      provider: getProviderCapabilities().llmProvider,
+    });
   });
 
   app.get('/api/capabilities', (_req, res) => {
@@ -735,7 +796,10 @@ async function createServer() {
             ? body.speakerBRole.trim()
             : current.speakerBRole;
 
-        if (nextSpeakerARole !== current.speakerARole || nextSpeakerBRole !== current.speakerBRole) {
+        if (
+          nextSpeakerARole !== current.speakerARole ||
+          nextSpeakerBRole !== current.speakerBRole
+        ) {
           nextTranscript = nextTranscript.map((seg) => ({
             ...seg,
             speakerLabel: seg.speaker === 'Speaker A' ? nextSpeakerARole : nextSpeakerBRole,
@@ -945,7 +1009,11 @@ async function createServer() {
             );
           }
         }
-      } else if (!rawTranscript && typeof req.body?.audioBase64 === 'string' && req.body.audioBase64) {
+      } else if (
+        !rawTranscript &&
+        typeof req.body?.audioBase64 === 'string' &&
+        req.body.audioBase64
+      ) {
         const mimeType = resolveAudioMimeType(req.body.mimeType, 'recording.webm');
         if (hasValidGeminiKey()) {
           rawTranscript = await transcribeWithGemini(
@@ -973,8 +1041,7 @@ async function createServer() {
         return;
       }
 
-      const requestedEngine =
-        req.body?.analysisEngine === 'local' ? 'local' : 'auto';
+      const requestedEngine = req.body?.analysisEngine === 'local' ? 'local' : 'auto';
       const effectiveProvider: LlmProviderMode =
         requestedEngine === 'local' ? 'local' : capabilities.llmProvider;
 
@@ -1111,8 +1178,7 @@ ${transcriptBlock}
 
 User request: ${question.trim()}`,
           config: {
-            systemInstruction:
-              `You are an executive B2B sales coach. Give crisp, practical, evidence-backed advice or follow-up drafts grounded strictly in the provided call transcript. Use clean plain prose with bullet points when helpful. ${languageHint}`,
+            systemInstruction: `You are an executive B2B sales coach. Give crisp, practical, evidence-backed advice or follow-up drafts grounded strictly in the provided call transcript. Use clean plain prose with bullet points when helpful. ${languageHint}`,
           },
         });
 
@@ -1133,12 +1199,7 @@ User request: ${question.trim()}`,
 
   app.use(
     '/api',
-    (
-      err: unknown,
-      _req: express.Request,
-      res: express.Response,
-      _next: express.NextFunction
-    ) => {
+    (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
       const status =
         typeof err === 'object' &&
         err !== null &&
@@ -1182,9 +1243,25 @@ User request: ${question.trim()}`,
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Cadence server listening on http://0.0.0.0:${PORT}`);
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
+    console.info(`Cadence v${APP_VERSION} listening on http://0.0.0.0:${PORT}`);
   });
+
+  // Drain in-flight requests on container stop instead of dropping connections.
+  const shutdown = (signal: NodeJS.Signals) => {
+    console.info(`${signal} received — closing the HTTP server.`);
+    httpServer.close((error) => {
+      if (error) {
+        console.error('Failed to close the HTTP server cleanly:', error);
+        process.exit(1);
+      }
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 
 createServer().catch((err) => {

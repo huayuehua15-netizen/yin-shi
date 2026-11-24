@@ -4,7 +4,8 @@ export type MilestoneType = 'peak' | 'dip' | 'objection' | 'commitment';
 
 export type CoachingMethodology = 'General B2B' | 'MEDDPICC' | 'SPIN Selling' | 'Challenger';
 
-export type CallStage = 'Discovery' | 'Product Demo' | 'Renewal & Expansion' | 'Security & Procurement';
+export type CallStage =
+  'Discovery' | 'Product Demo' | 'Renewal & Expansion' | 'Security & Procurement';
 
 export interface TranscriptSegment {
   id: string;
@@ -65,4 +66,23 @@ export interface CoachChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+}
+
+export type LlmProviderMode = 'gemini' | 'openai-compatible' | 'local';
+
+export interface ProviderCapabilities {
+  llmProvider: LlmProviderMode;
+  audioTranscription: boolean;
+  providerLabel: string;
+}
+
+/** Partial record update accepted by `PATCH /api/calls/:id`. */
+export interface CallRecordPatch {
+  title?: string;
+  accountName?: string;
+  speakerARole?: string;
+  speakerBRole?: string;
+  nextStepCompleted?: boolean;
+  toggleBookmarkTurnId?: string;
+  coachNoteUpdate?: { turnId: string; note: string };
 }

@@ -43,7 +43,9 @@ test('analyzeTranscriptLocally produces timeline and 3+3 coaching points with re
     'Strengths must cite verbatim transcript text'
   );
   assert.ok(
-    analysis.coaching.missedOpportunities.some((m) => m.evidenceQuote.includes('CFO') || m.evidenceQuote.length > 10),
+    analysis.coaching.missedOpportunities.some(
+      (m) => m.evidenceQuote.includes('CFO') || m.evidenceQuote.length > 10
+    ),
     'Missed opportunities must cite verbatim transcript text'
   );
 });
