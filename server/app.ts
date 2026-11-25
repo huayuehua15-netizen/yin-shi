@@ -5,7 +5,9 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { APP_VERSION, getProviderCapabilities } from './config';
 import { registerCallRoutes } from './routes/calls';
-import { registerAnalysisRoutes } from './routes/analysis';
+import { registerTranscribeRoute } from './routes/transcribe';
+import { registerAnalyzeCallRoute } from './routes/analyzeCall';
+import { registerCoachChatRoute } from './routes/coachChat';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,7 +74,9 @@ export async function createApp(): Promise<Express> {
   });
 
   registerCallRoutes(app);
-  registerAnalysisRoutes(app, upload);
+  registerTranscribeRoute(app, upload);
+  registerAnalyzeCallRoute(app, upload);
+  registerCoachChatRoute(app);
 
   app.use('/api', (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status =

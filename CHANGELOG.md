@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] — 2026-11-25
+
+### Changed
+
+- **Routes split per endpoint.** `server/routes/analysis.ts` (317 lines holding
+  three unrelated endpoints) is gone: `transcribe.ts`, `analyzeCall.ts` and
+  `coachChat.ts` each own exactly one endpoint, and `upload.ts` holds the shared
+  multipart type so no route module has to import multer's typings.
+- **The 503 fallback is a strategy, not three copies of the same try/catch.**
+  `server/analysis/fallback.ts` exposes `isProviderUnavailable()` and
+  `withLocalFallback()`; every provider path now degrades to the deterministic
+  local engine through one tested seam. Behaviour is unchanged: only
+  503 / UNAVAILABLE degrade, every other error still surfaces.
+
+### Added
+
+- Five tests for the fallback strategy: primary success, 503, UNAVAILABLE,
+  non-availability errors that must not be swallowed, and async fallbacks.
+
+### Quality
+
+- 53 unit tests, 11 smoke checks. Coverage 92.45% line / 80.86% branch / 92.06%
+  function.
+
 ## [1.3.0] — 2026-11-25
 
 ### Changed

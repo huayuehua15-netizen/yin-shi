@@ -93,7 +93,7 @@ function serialize<T>(key: string, task: () => Promise<T>): Promise<T> {
 1. **按变化原因分层，不按文件长度切。** `config`（环境探测与能力判定）、`analysis/normalize`（模型输出的统一修缮）、`analysis/{gemini,openai}`（两种协议）、`routes/{calls,analysis}`（资源边界）、`app`（组装与中间件顺序）。
 2. **行为零变化。** 拆分前先让 `npm run verify` 全绿，拆完逐字核对路由注册顺序与中间件链；11 项 smoke 契约检查原样通过，构建产物字节数未变（`index-*.js` 124.17 kB / gzip 33.40 kB），证明没有夹带功能改动。
 
-结果是 `server.ts` 从 1300 行降到 34 行，只留 boot / listen / SIGTERM 优雅关闭；最大的模块是 317 行的 `routes/analysis.ts`，内含三条长路由。
+结果是 `server.ts` 从 1300 行降到 34 行，只留 boot / listen / SIGTERM 优雅关闭。第一轮拆分后最大的模块是 317 行的 `routes/analysis.ts`，于是 1.3.1 又按端点把它拆成 `transcribe` / `analyzeCall` / `coachChat` 三个文件，最长的只剩 150 行；同时把散在三条路由里的「503 降级」收成一个 `withLocalFallback()` 策略，配 5 个用例。
 
 重构顺带暴露了一个真实的测试盲区：`normalizeParsedAnalysis` 是所有 Provider 输出的必经之路，却没有任何单元测试。补了 7 个用例（垃圾输入、越界时间戳、乱序时间线、空 transcript、模型自带 `speakerLabel`、`nextStepRecommendation` 保留、空对象兜底），行覆盖率 92.11% → 92.51%，分支 79.43% → 80.00%。
 
@@ -101,13 +101,14 @@ function serialize<T>(key: string, task: () => Promise<T>): Promise<T> {
 
 ## 7. 测试策略
 
-48 个用例、行覆盖率约 92.5%：
+53 个用例、行覆盖率约 92.5%：
 
 | 层                          | 覆盖内容                                                            |
 | :-------------------------- | :------------------------------------------------------------------ |
 | `server/store`              | CRUD、原子写、并发、损坏隔离、空数组语义、路径穿越                  |
 | `server/localAnalyzer`      | 说话人切分、情绪分类、教练卡片结构、追问回复                        |
 | `server/analysis/normalize` | 垃圾输入兜底、分数与时间戳夹紧、时间线排序、空 transcript、字段保留 |
+| `server/analysis/fallback`  | 503 / UNAVAILABLE 降级到本地引擎，鉴权与校验错误照常抛出不吞掉      |
 | `src/api/client`            | 响应解包、JSON/multipart 分支、离线与错误映射                       |
 | `src/utils`                 | 话术比例、互动摘要、对话指标、导出格式、快捷键解析、i18n 字典完整性 |
 | `src/utils/focus`           | Tab/Shift+Tab 在对话框边界循环、逃逸后拉回                          |
@@ -119,7 +120,7 @@ E2E。取而代之的是一条 `scripts/smoke.mjs`：用真实进程 + 临时数
 
 ## 8. 已知不足与下一步
 
-1. ~~`server.ts` 仍然偏大~~ 已在 1.3.0 拆成 `config` / `analysis` / `routes` / `app`，入口只剩 34 行。下一步是把 `routes/analysis.ts` 的三条路由按端点再拆细，并把 503 降级抽成显式的 `analyzeWithFallback` 策略对象。
+1. ~~`server.ts` 仍然偏大~~ 已在 1.3.0 拆成 `config` / `analysis` / `routes` / `app`，1.3.1 再把路由按端点拆开、把 503 降级收成 `withLocalFallback()`，入口只剩 34 行、最长文件 150 行。下一步是给 `store.ts` 定义正式接口，让 JSON 文件与 SQLite 成为可替换适配器。
 2. 持久化是单进程语义。若要多实例，需要换成 SQLite/Postgres 或对象存储，并保持 `store.ts` 的接口不变。
 3. 没有流式转写，长音频只能等整段完成；这需要 Provider 侧的流式 API 与前端增量渲染配合。
 4. 没有账号体系与团队多租户；演示场景够用，但不是产品形态。

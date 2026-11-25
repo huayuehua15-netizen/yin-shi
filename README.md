@@ -59,7 +59,7 @@ Cadence 是一个开源的 **AI 销售通话分析平台**：上传录音、浏�
 | **A real product, not a CRUD demo**             | Audio ingestion, diarization, sentiment scoring, coaching generation, exports, bilingual UI, keyboard-first workspace — the full loop works offline.                      |
 | **Provider abstraction with graceful fallback** | Gemini, any OpenAI-compatible LLM/Whisper endpoint, or a deterministic local engine. A 503 from a hosted model degrades to local analysis instead of failing the request. |
 | **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, and path-traversal guards.                                    |
-| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 48 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
+| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 53 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
 
 ## Product tour
 
@@ -243,8 +243,8 @@ is ephemeral, call history resets on restart or redeploy.
 ## Testing & quality
 
 ```bash
-npm test              # 48 unit tests: analytics, local analyzer, store, provider normalization, API client, focus trap, shortcuts, i18n
-npm run test:coverage # ~92.5% line / ~80% branch coverage
+npm test              # 53 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, API client, focus trap, shortcuts, i18n
+npm run test:coverage # ~92.5% line / ~80.9% branch coverage
 npm run smoke         # boots the real server, 11 end-to-end API checks
 npm run lint          # ESLint (flat config) + tsc --noEmit in strict mode
 npm run format:check  # Prettier
@@ -258,6 +258,8 @@ What the suite actually protects:
 - **Provider normalization**: a shared post-processing layer that repairs whatever an LLM returns —
   clamping scores, sorting the timeline, forcing exactly three coaching points, dropping blank turns,
   and rejecting nothing (an empty payload still yields a valid card).
+- **Fallback strategy**: a provider answering 503 / UNAVAILABLE degrades to the local engine, while
+  permission, validation and auth errors still surface instead of being silently swallowed.
 - **API client**: envelope unwrapping, JSON vs. multipart bodies, offline detection, and error mapping.
 - **Dialog keyboard behaviour**: Tab and Shift+Tab wrap inside the modal, focus lands on the first
   control, and focus returns to the trigger on close.
@@ -282,11 +284,16 @@ the smoke suite, and a guard fails the build if the emitted CSS loses its Tailwi
 │   │   ├── types.ts            # AnalysisMeta / AnalysisResult contracts
 │   │   ├── normalize.ts        # Shared post-processing (clamping, sorting, backfilling)
 │   │   ├── normalize.test.ts
+│   │   ├── fallback.ts         # 503/UNAVAILABLE → local engine, in one tested seam
+│   │   ├── fallback.test.ts
 │   │   ├── gemini.ts           # Gemini client, transcription, structured-schema analysis
 │   │   └── openai.ts           # OpenAI-compatible transcription, analysis, coach chat
 │   ├── routes/
 │   │   ├── calls.ts            # Call library CRUD + Range-enabled audio streaming
-│   │   └── analysis.ts         # Transcribe, ingest/analyze, coach-chat endpoints
+│   │   ├── transcribe.ts       # POST /api/transcribe
+│   │   ├── analyzeCall.ts      # POST /api/analyze-call (ingestion pipeline)
+│   │   ├── coachChat.ts        # POST /api/coach-chat
+│   │   └── upload.ts           # Shared multipart upload type
 │   ├── localAnalyzer.ts        # Zero-key deterministic diarization & coaching engine
 │   ├── localAnalyzer.test.ts
 │   ├── store.ts                # Atomic JSON persistence, write queue, safe audio paths
