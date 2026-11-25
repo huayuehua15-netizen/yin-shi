@@ -4,7 +4,45 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] — 2026-11-24
+## [1.2.0] — 2026-11-25
+
+### Added
+
+- **Dialog focus management** (`useDialogFocus` + `resolveTabTarget`): dialogs
+  focus their first control on mount, keep Tab and Shift+Tab inside the
+  boundary, and hand focus back to the trigger on close. Six unit tests cover
+  the wrap-around rules.
+- **`npm run smoke`**: boots the real server against a throwaway data directory
+  and asserts 11 contract checks — static hosting, asset serving, health,
+  capabilities, CRUD round-trips, the zero-key analysis pipeline, JSON 404s,
+  path traversal rejection, and request-id echo. Wired into CI as a separate
+  job.
+- **Next Step Tracker** on the team overview: every coaching card's next step
+  with its done / open state, replacing the previous topic bar chart.
+
+### Changed
+
+- **Sentiment chart is now measured, not stretched.** The SVG tracks its
+  container width through a `ResizeObserver` and renders at a fixed 200px
+  height with a 1:1 pixel mapping, so stroke weights and labels stay correct on
+  ultrawide screens. The workspace now shows the transcript and coaching card
+  above the fold.
+- Key moments are a single horizontally scrollable row instead of wrapping into
+  a second line.
+- The floating shortcuts button moved into the sidebar footer; it used to cover
+  the bottom of the coaching card.
+- Library rows are two lines: the title clamps to two lines and the meta row
+  keeps the duration visible while the account name truncates.
+- Below 640px the New Call button collapses to its icon, so the header stops
+  overflowing.
+
+### Fixed
+
+- **Hydration race**: a call added while the initial `/api/calls` request was
+  still in flight could be replaced by the older server snapshot.
+- **Stranded optimistic updates**: a failed `PATCH` or `DELETE` now resyncs from
+  the server instead of leaving the UI showing a change that was never persisted.
+- Transcript search and sidebar metadata no longer clip at common widths.
 
 ### Added
 

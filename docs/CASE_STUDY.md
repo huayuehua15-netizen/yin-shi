@@ -59,6 +59,12 @@ function serialize<T>(key: string, task: () => Promise<T>): Promise<T> {
 
 还有一个不显眼但会咬人的坑：`addCallRecord` 在写锁内部调用 `readAllCalls`，而后者在文件不存在时也会申请同一把锁，形成自锁。修复方式是在进入写锁前先完成首次播种，锁内只做纯读写。这个问题同样有测试兜底。
 
+### 3.1 另一类缺陷：SVG 被等比放大，吃掉了首屏
+
+`viewBox="0 0 760 236"` 配 `class="w-full h-auto"`，在 1440 宽的容器里会被等比放大到约 419px 高；加上标题、图例与里程碑，整张卡片接近 500px —— 首屏 60% 被一张图占掉，逐字稿和教练卡全被推到折叠线以下。
+
+修复不是简单写死高度：`preserveAspectRatio="none"` 会把线宽和文字横向拉扁。正确做法是用 `ResizeObserver` 测量容器宽度，把 `viewBox` 的宽度当成真实像素，配合固定 200px 高度做 1:1 映射。线宽、字号、刻度全部保持原样，同时首屏能露出逐字稿的前两轮和教练卡结论。
+
 ## 4. 健壮性与安全清单
 
 - **上传**：扩展名 + MIME 双重校验，25 MB 上限，文件名白名单化，磁盘路径再做 `path.basename` 与目录前缀校验，阻断路径穿越。
@@ -75,12 +81,12 @@ function serialize<T>(key: string, task: () => Promise<T>): Promise<T> {
 - **类型化 API 客户端**：`src/api/client.ts` 把前端依赖的全部端点收口到一个 `request<T>()`，统一 `ApiError`（含 `status` 与 `offline` 标记），组件里不再出现 `fetch` + `response.ok` + `as` 的重复三元组。
 - **严格类型**：`strict: true`、`noUnusedLocals`、`noUnusedParameters`、`noFallthroughCasesInSwitch`，零错误。
 - **Hooks 质量**：修复了 `useEffect` 依赖缺失、闭包引用未声明函数、无意义初始赋值等问题；`rules-of-hooks` 与 `exhaustive-deps` 作为 ESLint 错误/警告保留。
-- **可访问性**：对话框 `aria-modal` + 焦点语义、图表 `aria-label`、快捷键在输入框内自动抑制、`prefers-reduced-motion` 降级。
+- **可访问性**：对话框 `aria-modal` + 焦点陷阱（`useDialogFocus`）、Tab 在首尾循环、关闭后焦点归还触发者、图表 `aria-label`、快捷键在输入框内自动抑制、`prefers-reduced-motion` 降级。
 - **包体**：Vite `manualChunks` 拆出 React 与图标 vendor，入口从 ~345 kB 降到 ~121 kB（gzip 32 kB），部署后应用壳可长期缓存。
 
 ## 6. 测试策略
 
-35 个用例、行覆盖率约 92%：
+41 个用例、行覆盖率约 92%：
 
 | 层                     | 覆盖内容                                                            |
 | :--------------------- | :------------------------------------------------------------------ |
@@ -88,8 +94,12 @@ function serialize<T>(key: string, task: () => Promise<T>): Promise<T> {
 | `server/localAnalyzer` | 说话人切分、情绪分类、教练卡片结构、追问回复                        |
 | `src/api/client`       | 响应解包、JSON/multipart 分支、离线与错误映射                       |
 | `src/utils`            | 话术比例、互动摘要、对话指标、导出格式、快捷键解析、i18n 字典完整性 |
+| `src/utils/focus`      | Tab/Shift+Tab 在对话框边界循环、逃逸后拉回                          |
 
-**刻意没测什么：** React 组件的渲染与交互（当前没有 DOM 环境）、真实 Provider 的网络调用（需要密钥且不稳定）、端到端流程（成本高且收益低于纯逻辑层）。下一步会补 React Testing Library 的组件测试与一条 Playwright 冒烟路径，而不是为了覆盖率数字堆快照。
+**刻意没测什么：** React 组件的渲染快照、真实 Provider 的网络调用（需要密钥且不稳定）、浏览器级
+E2E。取而代之的是一条 `scripts/smoke.mjs`：用真实进程 + 临时数据目录跑 11 项契约检查（静态托管、
+资源可达、健康检查、CRUD 往返、零密钥分析链路、JSON 404、路径穿越拒绝、请求 ID 回显），并在 CI
+里独立成一个 job。组件交互目前靠类型、lint 与截图回归兜底 —— 这是明确的欠账，而不是假装覆盖到了。
 
 ## 7. 已知不足与下一步
 

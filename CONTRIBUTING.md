@@ -20,7 +20,7 @@ the quality gate every change must pass, and the conventions used in this reposi
 3. **Make the change**, then run the full gate:
 
    ```bash
-   npm run verify   # format check → ESLint + tsc → tests → production build
+   npm run verify   # format check → ESLint + tsc → tests → production build → smoke
    ```
 
 4. **Commit** with the repository's message template (see below) and open a pull
@@ -36,6 +36,7 @@ Every pull request must pass the same checks that CI runs on Node 20, 22, and 24
 | `npm run lint`          | ESLint 10 flat config + `tsc --noEmit` in strict mode |
 | `npm test`              | `node:test` unit suites                               |
 | `npm run build`         | Production Vite bundle                                |
+| `npm run smoke`         | Boots the server and runs the end-to-end API contract |
 | `npm run test:coverage` | Coverage report (informational, not a hard threshold) |
 
 ## Guidelines
