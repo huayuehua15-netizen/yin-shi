@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createApp } from './server/app';
 import { APP_VERSION } from './server/config';
 import { describeListenError } from './server/errors';
+import { detectForeignListener } from './server/selfcheck';
 
 const PORT = Number(process.env.PORT || 3000);
 
@@ -10,6 +11,9 @@ async function main(): Promise<void> {
 
   const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.info(`Cadence v${APP_VERSION} listening on http://0.0.0.0:${PORT}`);
+    void detectForeignListener(PORT, APP_VERSION).then((warning) => {
+      if (warning) console.warn(warning);
+    });
   });
 
   httpServer.on('error', (err: NodeJS.ErrnoException) => {

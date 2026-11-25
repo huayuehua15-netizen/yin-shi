@@ -59,7 +59,7 @@ Cadence 是一个开源的 **AI 销售通话分析平台**：上传录音、浏�
 | **A real product, not a CRUD demo**             | Audio ingestion, diarization, sentiment scoring, coaching generation, exports, bilingual UI, keyboard-first workspace — the full loop works offline.                      |
 | **Provider abstraction with graceful fallback** | Gemini, any OpenAI-compatible LLM/Whisper endpoint, or a deterministic local engine. A 503 from a hosted model degrades to local analysis instead of failing the request. |
 | **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, and path-traversal guards.                                    |
-| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 56 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
+| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 60 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
 
 ## Product tour
 
@@ -234,8 +234,9 @@ Hub is unreachable.
 The service listens on <http://localhost:3000> and exposes `/api/health`. Records and audio persist in
 the mounted `./data` volume.
 
-If that port already belongs to another local project, run elsewhere: `PORT=3100 npm run dev`. When the
-port is taken the entry point prints a hint with the next free suggestion instead of a bare stack trace.
+If that port already belongs to another local project, run elsewhere: `PORT=3100 npm run dev`. On
+Windows two processes can bind `0.0.0.0:3000` and `127.0.0.1:3000` separately, so the server also probes
+its own loopback on startup and warns when `localhost` is answered by a different service.
 
 ### Any Node.js 20 host
 
@@ -251,8 +252,8 @@ is ephemeral, call history resets on restart or redeploy.
 ## Testing & quality
 
 ```bash
-npm test              # 56 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, listen errors, API client, focus trap, shortcuts, i18n
-npm run test:coverage # ~92% line / ~81% branch coverage
+npm test              # 60 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, listen/loopback checks, API client, focus trap, shortcuts, i18n
+npm run test:coverage # ~92% line / ~82% branch coverage
 npm run smoke         # boots the real server, 11 end-to-end API checks
 npm run lint          # ESLint (flat config) + tsc --noEmit in strict mode
 npm run format:check  # Prettier
@@ -288,6 +289,7 @@ the smoke suite, and a guard fails the build if the emitted CSS loses its Tailwi
 │   ├── app.ts                  # Express composition: headers, logging, routing, Vite/static host
 │   ├── config.ts               # Env probes, provider capabilities, mime + enum resolution
 │   ├── errors.ts               # Provider failure → HTTP status mapping
+│   ├── selfcheck.ts            # Loopback owner probe (silent Windows port conflicts)
 │   ├── analysis/
 │   │   ├── types.ts            # AnalysisMeta / AnalysisResult contracts
 │   │   ├── normalize.ts        # Shared post-processing (clamping, sorting, backfilling)

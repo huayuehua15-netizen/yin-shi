@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] — 2026-11-25
+
+### Fixed
+
+- **A silent Windows port conflict that made `localhost` show another project.**
+  `0.0.0.0:3000` and `127.0.0.1:3000` can be bound by two processes at once, so
+  this server could start cleanly while the browser was answered by whoever
+  owned the loopback address. On startup it now probes
+  `127.0.0.1:$PORT/api/health` and warns when the reply is not its own version,
+  naming the port to switch to instead. Verified against a real conflict: port
+  3000 owned by a Docker container serving a different app.
+
+### Added
+
+- Four tests for the loopback probe: our own server, a foreign version,
+  a non-health 404, and nothing listening.
+
+### Quality
+
+- 60 unit tests, 11 smoke checks. Coverage 91.87% line / 81.70% branch / 92.17%
+  function.
+
 ## [1.3.2] — 2026-11-25
 
 ### Fixed
