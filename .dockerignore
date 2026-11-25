@@ -6,5 +6,7 @@ data
 .env.*
 !.env.example
 .playwright-cli
+docs
+scripts
 *.log
 .DS_Store

@@ -1,18 +1,23 @@
-# syntax=docker/dockerfile:1.7
-
 # --- Build stage: install all dependencies and produce the Vite bundle -------
+# No `# syntax=` frontend on purpose: this file sticks to stock BuildKit, so it
+# builds without pulling docker/dockerfile from Docker Hub first.
 FROM node:22-alpine AS build
+
+# Override with `--build-arg NPM_REGISTRY=https://registry.npmjs.org` if needed.
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --registry=$NPM_REGISTRY --no-audit --no-fund
 
 COPY . .
 RUN npm run build
 
 # --- Runtime stage: production dependencies + server sources only -------------
 FROM node:22-alpine AS runtime
+
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 WORKDIR /app
 
@@ -21,7 +26,7 @@ ENV NODE_ENV=production \
     CADENCE_DATA_DIR=/app/data
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund \
+RUN npm ci --registry=$NPM_REGISTRY --omit=dev --no-audit --no-fund \
     && npm cache clean --force
 
 COPY --from=build /app/dist ./dist

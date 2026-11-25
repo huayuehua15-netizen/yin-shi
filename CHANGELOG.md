@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] — 2026-11-25
+
+### Fixed
+
+- **The Docker image could not build on a network where Docker Hub is
+  unreachable.** The `# syntax=docker/dockerfile:1.7` frontend has to be pulled
+  from Docker Hub before the first stage even starts, and failed with a TLS
+  handshake timeout. The file now sticks to stock BuildKit, so it builds from
+  the local `node:22-alpine` base with no frontend fetch. npm packages go
+  through `NPM_REGISTRY` (defaults to npmmirror, overridable with
+  `--build-arg NPM_REGISTRY=https://registry.npmjs.org`). `.dockerignore` also
+  drops `docs/` and `scripts/` from the build context.
+- **A busy port reported only `Failed to start server`.** `describeListenError()`
+  now turns `EADDRINUSE` / `EACCES` into an actionable line — the taken port,
+  why, and the exact command to start on the next port. Other listen errors
+  still throw as before.
+
+### Verified
+
+- Built `cadence:local` and ran it on port 3190: `/api/health` returned
+  `version: 1.3.2` with `provider: local`, the SPA shell loaded, and the zero-key
+  `/api/analyze-call` pipeline produced 3 diarized turns and a full coaching
+  card inside the container.
+
+### Quality
+
+- 56 unit tests, 11 smoke checks. Coverage 91.88% line / 81.24% branch / 91.82%
+  function.
+
 ## [1.3.1] — 2026-11-25
 
 ### Changed

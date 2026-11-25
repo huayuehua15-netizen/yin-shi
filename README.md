@@ -59,7 +59,7 @@ Cadence 是一个开源的 **AI 销售通话分析平台**：上传录音、浏�
 | **A real product, not a CRUD demo**             | Audio ingestion, diarization, sentiment scoring, coaching generation, exports, bilingual UI, keyboard-first workspace — the full loop works offline.                      |
 | **Provider abstraction with graceful fallback** | Gemini, any OpenAI-compatible LLM/Whisper endpoint, or a deterministic local engine. A 503 from a hosted model degrades to local analysis instead of failing the request. |
 | **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, and path-traversal guards.                                    |
-| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 53 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
+| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 56 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
 
 ## Product tour
 
@@ -226,8 +226,16 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+The image builds from the stock `node:22-alpine` base with no BuildKit frontend to fetch, and pulls
+npm packages through `NPM_REGISTRY` (defaults to the npmmirror mirror; override with
+`--build-arg NPM_REGISTRY=https://registry.npmjs.org`), so it also builds on networks where Docker
+Hub is unreachable.
+
 The service listens on <http://localhost:3000> and exposes `/api/health`. Records and audio persist in
 the mounted `./data` volume.
+
+If that port already belongs to another local project, run elsewhere: `PORT=3100 npm run dev`. When the
+port is taken the entry point prints a hint with the next free suggestion instead of a bare stack trace.
 
 ### Any Node.js 20 host
 
@@ -243,8 +251,8 @@ is ephemeral, call history resets on restart or redeploy.
 ## Testing & quality
 
 ```bash
-npm test              # 53 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, API client, focus trap, shortcuts, i18n
-npm run test:coverage # ~92.5% line / ~80.9% branch coverage
+npm test              # 56 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, listen errors, API client, focus trap, shortcuts, i18n
+npm run test:coverage # ~92% line / ~81% branch coverage
 npm run smoke         # boots the real server, 11 end-to-end API checks
 npm run lint          # ESLint (flat config) + tsc --noEmit in strict mode
 npm run format:check  # Prettier

@@ -24,3 +24,18 @@ export function extractErrorDetails(err: unknown): { status: number; message: st
   }
   return { status: 500, message: 'Unexpected error processing audio.' };
 }
+
+/**
+ * Turns the two failures a fresh `npm run dev` actually hits into something the
+ * reader can act on, instead of a bare Node stack trace. Returns null for
+ * errors that carry no useful hint.
+ */
+export function describeListenError(err: NodeJS.ErrnoException, port: number): string | null {
+  if (err.code === 'EADDRINUSE') {
+    return `Port ${port} is already in use — another project or an old dev server owns it. Start on another port instead, for example: PORT=${port + 1} npm run dev`;
+  }
+  if (err.code === 'EACCES') {
+    return `Port ${port} requires elevated privileges. Pick a port above 1024 instead.`;
+  }
+  return null;
+}
