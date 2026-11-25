@@ -4,6 +4,36 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-11-25
+
+### Changed
+
+- **`server.ts` split from 1300 lines into 10 focused modules, with zero
+  behaviour change.** The entry point is now 34 lines (boot, listen, graceful
+  shutdown). Responsibilities moved to:
+  `server/config.ts` (env probes and provider capabilities),
+  `server/analysis/normalize.ts` (shared output repair),
+  `server/analysis/gemini.ts` and `server/analysis/openai.ts` (each protocol),
+  `server/routes/calls.ts` and `server/routes/analysis.ts` (resource boundaries),
+  and `server/app.ts` (middleware order and Vite/static hosting).
+  Route registration, middleware order, response shapes and status codes are
+  unchanged; the 11 smoke checks and the built bundle sizes confirm it.
+- `npm test` now discovers `server/**/*.test.ts`, so subdirectories can hold
+  their own suites.
+
+### Added
+
+- **Tests for `normalizeParsedAnalysis`**, the shared post-processing path every
+  provider output passes through and which previously had no coverage: junk
+  payloads, out-of-range timestamps, unsorted timelines, blank turns, model
+  supplied `speakerLabel`, preserved `nextStepRecommendation`, and an empty
+  object that still yields a valid coaching card.
+
+### Quality
+
+- 48 unit tests, 11 smoke checks. Coverage 92.51% line / 80.00% branch / 92.46%
+  function (from 92.11 / 79.43 / 91.67).
+
 ## [1.2.0] — 2026-11-25
 
 ### Added

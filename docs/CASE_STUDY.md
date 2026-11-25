@@ -84,31 +84,47 @@ function serialize<T>(key: string, task: () => Promise<T>): Promise<T> {
 - **可访问性**：对话框 `aria-modal` + 焦点陷阱（`useDialogFocus`）、Tab 在首尾循环、关闭后焦点归还触发者、图表 `aria-label`、快捷键在输入框内自动抑制、`prefers-reduced-motion` 降级。
 - **包体**：Vite `manualChunks` 拆出 React 与图标 vendor，入口从 ~345 kB 降到 ~121 kB（gzip 32 kB），部署后应用壳可长期缓存。
 
-## 6. 测试策略
+## 6. 后端重构：把 1300 行拆成 10 个模块
 
-41 个用例、行覆盖率约 92%：
+最初所有后端逻辑都堆在 `server.ts`：三套 Provider 适配、响应归一化、六组路由、静态托管和优雅关闭。1300 行的问题不是"写不下"，而是**任何改动都要先读完一屏无关代码**——这也是面试里"讲讲你的架构"最容易被追问的软肋。
 
-| 层                     | 覆盖内容                                                            |
-| :--------------------- | :------------------------------------------------------------------ |
-| `server/store`         | CRUD、原子写、并发、损坏隔离、空数组语义、路径穿越                  |
-| `server/localAnalyzer` | 说话人切分、情绪分类、教练卡片结构、追问回复                        |
-| `src/api/client`       | 响应解包、JSON/multipart 分支、离线与错误映射                       |
-| `src/utils`            | 话术比例、互动摘要、对话指标、导出格式、快捷键解析、i18n 字典完整性 |
-| `src/utils/focus`      | Tab/Shift+Tab 在对话框边界循环、逃逸后拉回                          |
+拆分只遵守两条原则：
+
+1. **按变化原因分层，不按文件长度切。** `config`（环境探测与能力判定）、`analysis/normalize`（模型输出的统一修缮）、`analysis/{gemini,openai}`（两种协议）、`routes/{calls,analysis}`（资源边界）、`app`（组装与中间件顺序）。
+2. **行为零变化。** 拆分前先让 `npm run verify` 全绿，拆完逐字核对路由注册顺序与中间件链；11 项 smoke 契约检查原样通过，构建产物字节数未变（`index-*.js` 124.17 kB / gzip 33.40 kB），证明没有夹带功能改动。
+
+结果是 `server.ts` 从 1300 行降到 34 行，只留 boot / listen / SIGTERM 优雅关闭；最大的模块是 317 行的 `routes/analysis.ts`，内含三条长路由。
+
+重构顺带暴露了一个真实的测试盲区：`normalizeParsedAnalysis` 是所有 Provider 输出的必经之路，却没有任何单元测试。补了 7 个用例（垃圾输入、越界时间戳、乱序时间线、空 transcript、模型自带 `speakerLabel`、`nextStepRecommendation` 保留、空对象兜底），行覆盖率 92.11% → 92.51%，分支 79.43% → 80.00%。
+
+一个刻意的取舍：没有引入 DI 容器。Provider 是**函数 + 运行时环境探测**，不是需要注入的类；为了"看起来架构化"多加一层 `Container`，只会让 `getGeminiClient()` 多绕两跳。`registerCallRoutes(app)` 已经把依赖收敛到参数上，够用即可。
+
+## 7. 测试策略
+
+48 个用例、行覆盖率约 92.5%：
+
+| 层                          | 覆盖内容                                                            |
+| :-------------------------- | :------------------------------------------------------------------ |
+| `server/store`              | CRUD、原子写、并发、损坏隔离、空数组语义、路径穿越                  |
+| `server/localAnalyzer`      | 说话人切分、情绪分类、教练卡片结构、追问回复                        |
+| `server/analysis/normalize` | 垃圾输入兜底、分数与时间戳夹紧、时间线排序、空 transcript、字段保留 |
+| `src/api/client`            | 响应解包、JSON/multipart 分支、离线与错误映射                       |
+| `src/utils`                 | 话术比例、互动摘要、对话指标、导出格式、快捷键解析、i18n 字典完整性 |
+| `src/utils/focus`           | Tab/Shift+Tab 在对话框边界循环、逃逸后拉回                          |
 
 **刻意没测什么：** React 组件的渲染快照、真实 Provider 的网络调用（需要密钥且不稳定）、浏览器级
 E2E。取而代之的是一条 `scripts/smoke.mjs`：用真实进程 + 临时数据目录跑 11 项契约检查（静态托管、
 资源可达、健康检查、CRUD 往返、零密钥分析链路、JSON 404、路径穿越拒绝、请求 ID 回显），并在 CI
 里独立成一个 job。组件交互目前靠类型、lint 与截图回归兜底 —— 这是明确的欠账，而不是假装覆盖到了。
 
-## 7. 已知不足与下一步
+## 8. 已知不足与下一步
 
-1. `server.ts` 仍然偏大（路由 + Provider 适配 + 降级策略集中在一个文件）。合理的下一步是按 `routes/`、`providers/` 拆分，并用依赖注入替代模块级单例。
+1. ~~`server.ts` 仍然偏大~~ 已在 1.3.0 拆成 `config` / `analysis` / `routes` / `app`，入口只剩 34 行。下一步是把 `routes/analysis.ts` 的三条路由按端点再拆细，并把 503 降级抽成显式的 `analyzeWithFallback` 策略对象。
 2. 持久化是单进程语义。若要多实例，需要换成 SQLite/Postgres 或对象存储，并保持 `store.ts` 的接口不变。
 3. 没有流式转写，长音频只能等整段完成；这需要 Provider 侧的流式 API 与前端增量渲染配合。
 4. 没有账号体系与团队多租户；演示场景够用，但不是产品形态。
 
-## 8. 如果重来一次
+## 9. 如果重来一次
 
 - 会先定义 `Store` 接口再写实现，让「JSON 文件」和「SQLite」成为可替换的适配器，而不是把文件语义泄漏到路由层。
 - 会把「Provider 降级」抽成显式的策略对象（`analyzeWithFallback`），而不是在三个分支里各写一次 `if (msg.includes('503'))`。
