@@ -1,4 +1,6 @@
 import { Keyboard, X } from 'lucide-react';
+import { useRef } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import { getTranslations, type Locale } from '../i18n/translations';
 
 interface ShortcutsModalProps {
@@ -8,6 +10,8 @@ interface ShortcutsModalProps {
 
 export function ShortcutsModal({ locale, onClose }: ShortcutsModalProps) {
   const t = getTranslations(locale);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef);
 
   const shortcuts: Array<{ keys: string[]; label: string }> = [
     { keys: ['Space'], label: t.shortcutPlayPause },
@@ -30,6 +34,7 @@ export function ShortcutsModal({ locale, onClose }: ShortcutsModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcuts-title"
+        ref={dialogRef}
         className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >

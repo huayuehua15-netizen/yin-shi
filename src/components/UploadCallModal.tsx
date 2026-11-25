@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from 'react';
 import { api } from '../api/client';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import { getTranslations, type Locale } from '../i18n/translations';
 import type {
   CallStage,
@@ -101,6 +102,7 @@ export function UploadCallModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const speechRecRef = useRef<SpeechRecognitionLike | null>(null);
@@ -108,6 +110,8 @@ export function UploadCallModal({
   const timerRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  useDialogFocus(dialogRef, isOpen);
 
   const stopRecordingResources = useCallback(() => {
     if (timerRef.current) {
@@ -541,6 +545,7 @@ export function UploadCallModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="upload-call-modal-title"
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
     >
       <div className="w-full max-w-xl bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-h-[92vh] flex flex-col">
