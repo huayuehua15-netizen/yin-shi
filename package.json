@@ -39,8 +39,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "tsx --test src/utils/*.test.ts src/api/*.test.ts \"server/**/*.test.ts\"",
-    "test:coverage": "tsx --test --experimental-test-coverage src/utils/*.test.ts src/api/*.test.ts \"server/**/*.test.ts\"",
+    "test": "tsx --test src/utils/*.test.ts src/api/*.test.ts server/*.test.ts server/*/*.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage src/utils/*.test.ts src/api/*.test.ts server/*.test.ts server/*/*.test.ts",
     "smoke": "node scripts/smoke.mjs",
     "verify": "npm run format:check && npm run lint && npm test && npm run build && npm run smoke"
   },
