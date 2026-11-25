@@ -1,4 +1,4 @@
-import { BarChart3, FileText, Mic, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { BarChart3, FileText, Keyboard, Mic, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { getTranslations, type Locale } from '../i18n/translations';
 import type { SalesCallRecord } from '../types/call';
@@ -13,6 +13,7 @@ interface SidebarProps {
   onSelectCall: (callId: string) => void;
   onOpenUploadModal: (initialMode: 'upload' | 'record' | 'transcript') => void;
   onDeleteCall: (callId: string) => void;
+  onOpenShortcuts: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -26,6 +27,7 @@ export function Sidebar({
   onSelectCall,
   onOpenUploadModal,
   onDeleteCall,
+  onOpenShortcuts,
   mobileOpen,
   onCloseMobile,
 }: SidebarProps) {
@@ -186,6 +188,12 @@ export function Sidebar({
                       : 'border border-transparent hover:bg-slate-200/60'
                   }`}
                 >
+                  {isActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-blue-700"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -194,30 +202,24 @@ export function Sidebar({
                       onCloseMobile();
                     }}
                     aria-current={isActive ? 'page' : undefined}
+                    title={`${call.title} · ${call.accountName} · ${call.callDate}`}
                     className="w-full text-left px-3 py-2.5 pr-9 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                   >
                     <div
-                      className={`text-sm font-medium leading-snug truncate ${
+                      className={`text-sm font-medium leading-snug line-clamp-2 ${
                         isActive ? 'text-slate-950' : 'text-slate-800'
                       }`}
                     >
                       {call.title}
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 truncate">
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                       <span className="truncate">{call.accountName}</span>
-                      <span aria-hidden="true">·</span>
+                      <span className="text-slate-300 shrink-0" aria-hidden="true">
+                        ·
+                      </span>
                       <span className="font-mono tabular-nums shrink-0">
                         {formatDurationLabel(call.durationSec)}
                       </span>
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-slate-400">
-                      {call.callDate}
-                      {call.methodology && (
-                        <>
-                          <span aria-hidden="true"> · </span>
-                          <span>{call.methodology}</span>
-                        </>
-                      )}
                     </div>
                   </button>
 
@@ -239,6 +241,25 @@ export function Sidebar({
             })
           )}
         </nav>
+      </div>
+
+      <div className="px-3 py-3 border-t border-slate-200">
+        <button
+          type="button"
+          onClick={() => {
+            onOpenShortcuts();
+            onCloseMobile();
+          }}
+          className="w-full inline-flex items-center justify-between px-2.5 py-2 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-200/60 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+        >
+          <span className="inline-flex items-center gap-2">
+            <Keyboard className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            {t.shortcutsHint}
+          </span>
+          <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border border-slate-300 bg-white font-mono text-[10px] text-slate-500">
+            ?
+          </kbd>
+        </button>
       </div>
     </div>
   );

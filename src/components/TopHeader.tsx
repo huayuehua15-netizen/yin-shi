@@ -164,10 +164,11 @@ export function TopHeader({
         <button
           type="button"
           onClick={onOpenUpload}
-          className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-blue-700 text-white text-xs sm:text-sm font-medium hover:bg-blue-800 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          aria-label={t.newCall}
+          className="inline-flex items-center gap-1.5 px-2.5 sm:px-4 py-2 rounded-lg bg-blue-700 text-white text-xs sm:text-sm font-medium hover:bg-blue-800 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         >
           <Upload className="w-4 h-4 shrink-0" />
-          <span>{t.newCall}</span>
+          <span className="hidden sm:inline">{t.newCall}</span>
         </button>
       </div>
     </header>

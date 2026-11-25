@@ -1,4 +1,4 @@
-import { Keyboard, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from './api/client';
 import { AudioPlayerBar } from './components/AudioPlayerBar';
@@ -56,6 +56,9 @@ export default function App() {
   const [draftSpeakerB, setDraftSpeakerB] = useState<string>('');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Guards the initial hydration: a call added while the list request is still
+  // in flight must not be replaced by the older server snapshot.
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -76,6 +79,8 @@ export default function App() {
     api
       .listCalls(controller.signal)
       .then((persisted) => {
+        if (hydratedRef.current) return;
+        hydratedRef.current = true;
         if (persisted.length === 0) return;
         setCalls(persisted);
         setActiveCallId((prev) =>
@@ -191,6 +196,20 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const resyncFromServer = useCallback(async () => {
+    try {
+      const fresh = await api.listCalls();
+      // An empty response means every call was removed; keep the optimistic
+      // state rather than rendering an empty workspace.
+      if (fresh.length === 0) return;
+      hydratedRef.current = true;
+      setCalls(fresh);
+      setActiveCallId((prev) => (fresh.some((call) => call.id === prev) ? prev : fresh[0].id));
+    } catch {
+      // The banner already explains the failure; retrying here would loop.
+    }
+  }, []);
+
   const patchActiveCall = async (payload: CallRecordPatch) => {
     setSyncError(null);
     try {
@@ -198,6 +217,7 @@ export default function App() {
       setCalls((prev) => prev.map((call) => (call.id === updated.id ? updated : call)));
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Unable to persist update.');
+      void resyncFromServer();
     }
   };
 
@@ -283,6 +303,7 @@ export default function App() {
   };
 
   const handleCallAnalyzed = (newCall: SalesCallRecord) => {
+    hydratedRef.current = true;
     setCalls((prev) => [newCall, ...prev]);
     setActiveCallId(newCall.id);
     setActiveView('call');
@@ -302,6 +323,7 @@ export default function App() {
       await api.deleteCall(callId);
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Unable to delete this call.');
+      void resyncFromServer();
     }
   };
 
@@ -382,6 +404,7 @@ export default function App() {
         onSelectCall={setActiveCallId}
         onOpenUploadModal={openModal}
         onDeleteCall={(id) => void handleDeleteCall(id)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
@@ -621,20 +644,6 @@ export default function App() {
           onCallAnalyzed={handleCallAnalyzed}
         />
       )}
-
-      <button
-        type="button"
-        onClick={() => setShortcutsOpen(true)}
-        aria-label={t.shortcutsAria}
-        title={t.shortcutsAria}
-        className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/95 border border-slate-200 text-xs font-medium text-slate-600 shadow-lg hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-      >
-        <Keyboard className="w-4 h-4" />
-        <span className="hidden sm:inline">{t.shortcutsHint}</span>
-        <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-mono text-[10px] text-slate-500">
-          ?
-        </kbd>
-      </button>
 
       {shortcutsOpen && <ShortcutsModal locale={locale} onClose={() => setShortcutsOpen(false)} />}
     </div>

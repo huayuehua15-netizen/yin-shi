@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTranslations, type Locale } from '../i18n/translations';
 import type { SentimentPoint, TranscriptSegment } from '../types/call';
 import {
@@ -17,8 +17,8 @@ interface SentimentGraphProps {
   onSeek: (timeSec: number) => void;
 }
 
-const CHART_WIDTH = 760;
-const CHART_HEIGHT = 236;
+const DEFAULT_CHART_WIDTH = 760;
+const CHART_HEIGHT = 200;
 const PAD_LEFT = 42;
 const PAD_RIGHT = 18;
 const PAD_TOP = 22;
@@ -56,7 +56,23 @@ export function SentimentGraph({
   const [showProspectLine, setShowProspectLine] = useState(true);
   const [showRepEnergyLine, setShowRepEnergyLine] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  // The chart is a real SVG with a 1:1 pixel mapping, so it has to track the
+  // container width instead of stretching a fixed viewBox (which would scale
+  // stroke weights and distort labels on wide screens).
+  const [chartWidth, setChartWidth] = useState(DEFAULT_CHART_WIDTH);
+  const chartRef = useRef<HTMLDivElement | null>(null);
   const t = getTranslations(locale);
+
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = Math.round(entries[0]?.contentRect.width ?? 0);
+      if (width > 0) setChartWidth(Math.max(420, width));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const summary = useMemo(() => computeEngagementSummary(timeline), [timeline]);
   const convMetrics = useMemo(() => computeConversationMetrics(transcript), [transcript]);
@@ -67,7 +83,7 @@ export function SentimentGraph({
     timeline.length > 0 ? timeline[timeline.length - 1].timeSec : 1
   );
 
-  const plotW = CHART_WIDTH - PAD_LEFT - PAD_RIGHT;
+  const plotW = chartWidth - PAD_LEFT - PAD_RIGHT;
   const plotH = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
 
   const toX = useCallback(
@@ -122,9 +138,9 @@ export function SentimentGraph({
     <section
       aria-label={t.sentimentGraphAria}
       data-testid="sentiment-graph-section"
-      className="bg-white border border-slate-200 rounded-xl p-5"
+      className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5"
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
         <div>
           <h2 className="font-display text-base font-semibold text-slate-900">
             {t.sentimentGraphTitle}
@@ -213,17 +229,18 @@ export function SentimentGraph({
       </div>
 
       {timeline.length === 0 ? (
-        <div className="h-56 flex items-center justify-center border border-dashed border-slate-200 rounded-lg text-sm text-slate-500">
+        <div className="h-40 flex items-center justify-center border border-dashed border-slate-200 rounded-lg text-sm text-slate-500">
           {t.noTimelineData}
         </div>
       ) : (
-        <div className="relative">
+        <div className="relative" ref={chartRef}>
           <svg
-            viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+            viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT}`}
             role="img"
             aria-label={t.sentimentChartAria}
             data-testid="sentiment-chart-svg"
-            className="w-full h-auto overflow-visible select-none"
+            style={{ height: CHART_HEIGHT }}
+            className="w-full overflow-visible select-none"
           >
             <defs>
               <linearGradient id="engagementAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -239,7 +256,7 @@ export function SentimentGraph({
                   <line
                     x1={PAD_LEFT}
                     y1={y}
-                    x2={CHART_WIDTH - PAD_RIGHT}
+                    x2={chartWidth - PAD_RIGHT}
                     y2={y}
                     stroke="#E2E8F0"
                     strokeDasharray={tick === 50 ? '4 4' : undefined}
@@ -382,27 +399,31 @@ export function SentimentGraph({
           )}
 
           {milestones.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-slate-500 mr-1">{t.keyMoments}</span>
-              {milestones.map((m, idx) => {
-                const toneClass =
-                  m.milestoneType === 'objection' || m.milestoneType === 'dip'
-                    ? 'text-amber-800 hover:bg-amber-50 border-amber-200'
-                    : 'text-emerald-800 hover:bg-emerald-50 border-emerald-200';
-                return (
-                  <button
-                    key={`${m.timeSec}-${idx}`}
-                    type="button"
-                    onClick={() => onSeek(m.timeSec)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${toneClass}`}
-                  >
-                    <span className="font-mono tabular-nums font-medium">
-                      {formatTimestamp(m.timeSec)}
-                    </span>
-                    <span>{m.label}</span>
-                  </button>
-                );
-              })}
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 overflow-x-auto">
+              <span className="text-xs font-medium text-slate-500 shrink-0 pr-1">
+                {t.keyMoments}
+              </span>
+              <div className="flex items-center gap-2 flex-nowrap">
+                {milestones.map((m, idx) => {
+                  const toneClass =
+                    m.milestoneType === 'objection' || m.milestoneType === 'dip'
+                      ? 'text-amber-800 hover:bg-amber-50 border-amber-200'
+                      : 'text-emerald-800 hover:bg-emerald-50 border-emerald-200';
+                  return (
+                    <button
+                      key={`${m.timeSec}-${idx}`}
+                      type="button"
+                      onClick={() => onSeek(m.timeSec)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${toneClass}`}
+                    >
+                      <span className="font-mono tabular-nums font-medium">
+                        {formatTimestamp(m.timeSec)}
+                      </span>
+                      <span>{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

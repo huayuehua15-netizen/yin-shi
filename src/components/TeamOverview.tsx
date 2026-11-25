@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Circle } from 'lucide-react';
 import { useMemo } from 'react';
 import { getTranslations, type Locale } from '../i18n/translations';
 import type { SalesCallRecord } from '../types/call';
@@ -19,7 +19,6 @@ interface TeamOverviewProps {
 
 export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: TeamOverviewProps) {
   const overview = useMemo(() => computeLibraryOverview(calls), [calls]);
-  const maxTopicCount = Math.max(1, ...(overview.topicDistribution.map((t) => t.count) || [1]));
   const t = getTranslations(locale);
 
   return (
@@ -34,7 +33,7 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
         <button
           type="button"
           onClick={onOpenUpload}
-          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 whitespace-nowrap shrink-0"
+          className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         >
           {t.analyzeAnotherCall}
         </button>
@@ -156,35 +155,48 @@ export function TeamOverview({ calls, locale, onSelectCall, onOpenUpload }: Team
           </div>
         </section>
 
-        {/* Topic Frequency Distribution */}
+        {/* Action tracker: the coaching card promises a next step, this panel
+            shows whether it was actually closed out. */}
         <section
-          aria-label={t.topicDistributionAria}
+          aria-label={t.nextStepTracker}
+          data-testid="next-step-tracker-section"
           className="xl:col-span-4 bg-white border border-slate-200 rounded-xl p-5"
         >
           <h2 className="font-display text-base font-semibold text-slate-900">
-            {t.recurringCallTopics}
+            {t.nextStepTracker}
           </h2>
-          <p className="mt-0.5 text-xs text-slate-500 mb-4">{t.topicSubtitle}</p>
+          <p className="mt-0.5 text-xs text-slate-500 mb-4">{t.nextStepTrackerSubtitle}</p>
 
-          {overview.topicDistribution.length === 0 ? (
-            <p className="text-sm text-slate-500">{t.noTopicTags}</p>
+          {calls.length === 0 ? (
+            <p className="text-sm text-slate-500">{t.noNextSteps}</p>
           ) : (
-            <ul className="space-y-3">
-              {overview.topicDistribution.map((item) => {
-                const widthPct = Math.max(12, Math.round((item.count / maxTopicCount) * 100));
+            <ul className="space-y-4">
+              {calls.map((call) => {
+                const done = call.coaching.nextStepCompleted;
                 return (
-                  <li key={item.topic} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-800 truncate pr-2">{item.topic}</span>
-                      <span className="font-mono tabular-nums text-slate-500 shrink-0">
-                        {item.count} {item.count === 1 ? t.turnSingular : t.turnPlural}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        style={{ width: `${widthPct}%` }}
-                        className="h-full bg-slate-800 rounded-full"
-                      />
+                  <li key={call.id} className="flex items-start gap-2.5">
+                    <span
+                      className={`mt-0.5 shrink-0 ${done ? 'text-emerald-700' : 'text-slate-400'}`}
+                      aria-hidden="true"
+                    >
+                      {done ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-slate-900 truncate">
+                          {call.accountName}
+                        </span>
+                        <span
+                          className={`shrink-0 text-[10px] font-medium uppercase tracking-wide ${
+                            done ? 'text-emerald-700' : 'text-slate-500'
+                          }`}
+                        >
+                          {done ? t.nextStepDone : t.nextStepOpen}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600 line-clamp-2">
+                        {call.coaching.nextStepRecommendation}
+                      </p>
                     </div>
                   </li>
                 );
