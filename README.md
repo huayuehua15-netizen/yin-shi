@@ -54,12 +54,12 @@ Cadence 是一个开源的 **AI 销售通话分析平台**：上传录音、浏�
 
 ## Why it is worth a look
 
-|                                                 |                                                                                                                                                                           |
-| :---------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **A real product, not a CRUD demo**             | Audio ingestion, diarization, sentiment scoring, coaching generation, exports, bilingual UI, keyboard-first workspace — the full loop works offline.                      |
-| **Provider abstraction with graceful fallback** | Gemini, any OpenAI-compatible LLM/Whisper endpoint, or a deterministic local engine. A 503 from a hosted model degrades to local analysis instead of failing the request. |
-| **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, and path-traversal guards.                                    |
-| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 60 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, and Docker self-hosting.              |
+|                                                 |                                                                                                                                                                                           |
+| :---------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A real product, not a CRUD demo**             | Audio ingestion, diarization, sentiment scoring, coaching generation, exports, bilingual UI, keyboard-first workspace — the full loop works offline.                                      |
+| **Provider abstraction with graceful fallback** | Gemini, any OpenAI-compatible LLM/Whisper endpoint, or a deterministic local engine. A 503 from a hosted model degrades to local analysis instead of failing the request.                 |
+| **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, and path-traversal guards.                                                    |
+| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 60 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, 13 browser checks in Chrome, and Docker self-hosting. |
 
 ## Product tour
 
@@ -172,6 +172,8 @@ Everyday scripts:
 | `npm test`              | Unit tests (`node:test`)                                 |
 | `npm run test:coverage` | Tests with the built-in coverage report                  |
 | `npm run lint`          | ESLint + `tsc --noEmit`                                  |
+| `npm run smoke`         | Boots the server and runs 11 API contract checks         |
+| `npm run e2e`           | Drives the built UI in Chrome through 13 browser checks  |
 | `npm run verify`        | Format check, lint, tests, build — the same gate CI runs |
 
 ## AI provider modes
@@ -255,6 +257,7 @@ is ephemeral, call history resets on restart or redeploy.
 npm test              # 60 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, listen/loopback checks, API client, focus trap, shortcuts, i18n
 npm run test:coverage # ~92% line / ~82% branch coverage
 npm run smoke         # boots the real server, 11 end-to-end API checks
+npm run e2e           # boots the production build, drives the UI in Chrome, 13 browser checks
 npm run lint          # ESLint (flat config) + tsc --noEmit in strict mode
 npm run format:check  # Prettier
 ```
@@ -276,10 +279,15 @@ What the suite actually protects:
 - **End-to-end contract** (`npm run smoke`): the real server against a temporary data directory —
   static hosting, asset serving, health, CRUD persistence, the zero-key analysis pipeline, JSON 404s,
   and path-traversal rejection.
+- **Browser flows** (`npm run e2e`): the production bundle driven by a real Chrome — ingest a call
+  through the paste flow, filter the library, bookmark a turn and re-filter, flip the next-step
+  state, delete, open the overview tracker, trap focus inside dialogs, and hold the layout at
+  six widths from 1440 down to 390px.
 
 CI runs format, lint/typecheck, tests, and a production build on **Node 20, 22, and 24**; a separate
 coverage job publishes the report as a build artifact, a second job boots the built server and runs
-the smoke suite, and a guard fails the build if the emitted CSS loses its Tailwind utilities.
+the smoke suite, a third job drives that build in headless Chrome for the browser flows, and a guard
+fails the build if the emitted CSS loses its Tailwind utilities.
 
 ## Project structure
 
@@ -323,9 +331,10 @@ the smoke suite, and a guard fails the build if the emitted CSS loses its Tailwi
 │   └── social-preview.png      # GitHub social preview (1280×640)
 ├── scripts/
 │   ├── capture-docs.mjs        # Reproducible screenshot pipeline (Puppeteer + local Chrome)
-│   └── smoke.mjs               # Boots the server and runs 11 end-to-end API checks
+│   ├── smoke.mjs               # Boots the server and runs 11 end-to-end API checks
+│   └── e2e.mjs                 # Drives the built UI in Chrome: 13 browser flows
 ├── public/                     # Favicon, PWA manifest, robots.txt, Open Graph cover
-├── .github/workflows/ci.yml    # Node matrix, coverage artifact, CSS sanity guard
+├── .github/workflows/ci.yml    # Node matrix, coverage artifact, CSS sanity guard, browser E2E
 ├── Dockerfile                  # Multi-stage self-hosting image
 └── docker-compose.yml          # One-command local / server deployment
 ```

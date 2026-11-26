@@ -21,6 +21,7 @@ the quality gate every change must pass, and the conventions used in this reposi
 
    ```bash
    npm run verify   # format check → ESLint + tsc → tests → production build → smoke
+   npm run e2e      # optional locally, mandatory in CI: drives the build in Chrome
    ```
 
 4. **Commit** with the repository's message template (see below) and open a pull
@@ -37,6 +38,7 @@ Every pull request must pass the same checks that CI runs on Node 20, 22, and 24
 | `npm test`              | `node:test` unit suites                               |
 | `npm run build`         | Production Vite bundle                                |
 | `npm run smoke`         | Boots the server and runs the end-to-end API contract |
+| `npm run e2e`           | Drives the built UI in Chrome through real user flows |
 | `npm run test:coverage` | Coverage report (informational, not a hard threshold) |
 
 ## Guidelines

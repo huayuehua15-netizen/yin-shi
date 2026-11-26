@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-11-26
+
+### Added
+
+- **Browser-level end-to-end checks (`npm run e2e`).** The HTTP smoke suite
+  proves the API contract but says nothing about whether a person can use the
+  product. `scripts/e2e.mjs` boots the production build against a throwaway
+  data directory, then drives a real Chrome through 13 flows: render the
+  workspace, ingest a call via Paste Text, confirm it persisted, filter the
+  library and clear the filter, bookmark a turn (verified through `PATCH`),
+  narrow to the bookmarked filter, flip the next-step state, delete the call,
+  open the overview tracker, keep focus inside the shortcuts dialog, and hold
+  the layout at six widths from 1440 down to 390px with the mobile drawer.
+  Chrome is auto-detected per platform or supplied through `CHROME_PATH`.
+
+### Changed
+
+- CI grows a **Browser E2E** job that builds the bundle and runs the flows in
+  headless Chrome on Node 22.
+
+### Quality
+
+- 60 unit tests, 11 smoke checks, 13 browser checks.
+
 ## [1.3.3] — 2026-11-25
 
 ### Fixed
