@@ -58,8 +58,8 @@ Cadence 是一个开源的 **AI 销售通话分析平台**：上传录音、浏�
 | :---------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **A real product, not a CRUD demo**             | Audio ingestion, diarization, sentiment scoring, coaching generation, exports, bilingual UI, keyboard-first workspace — the full loop works offline.                                      |
 | **Provider abstraction with graceful fallback** | Gemini, any OpenAI-compatible LLM/Whisper endpoint, or a deterministic local engine. A 503 from a hosted model degrades to local analysis instead of failing the request.                 |
-| **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, and path-traversal guards.                                                    |
-| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 60 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, 13 browser checks in Chrome, and Docker self-hosting. |
+| **Persistence that survives reality**           | Atomic temp-file + rename writes, serialized read-modify-write cycles, read caching, corruption quarantine, path-traversal guards, all behind a swappable `Store` interface.              |
+| **Engineered, not vibes**                       | Strict TypeScript, ESLint 10 + Prettier, 67 unit tests at ~92% line coverage, a Node 20/22/24 CI matrix, an end-to-end smoke suite, 13 browser checks in Chrome, and Docker self-hosting. |
 
 ## Product tour
 
@@ -254,8 +254,8 @@ is ephemeral, call history resets on restart or redeploy.
 ## Testing & quality
 
 ```bash
-npm test              # 60 unit tests: analytics, local analyzer, store, provider normalization, fallback strategy, listen/loopback checks, API client, focus trap, shortcuts, i18n
-npm run test:coverage # ~92% line / ~82% branch coverage
+npm test              # 67 unit tests: analytics, local analyzer, store contract, provider normalization, fallback strategy, listen/loopback checks, API client, focus trap, shortcuts, i18n
+npm run test:coverage # ~92% line / ~83% branch coverage
 npm run smoke         # boots the real server, 11 end-to-end API checks
 npm run e2e           # boots the production build, drives the UI in Chrome, 13 browser checks
 npm run lint          # ESLint (flat config) + tsc --noEmit in strict mode
@@ -266,6 +266,9 @@ What the suite actually protects:
 
 - **Persistence**: CRUD round-trips, atomic writes with no temp-file leaks, concurrent `addCallRecord`
   calls, concurrent field updates, corruption quarantine, and "an empty store stays empty".
+- **Store contract**: seven tests written against the `Store` interface — seeding, explicit empty
+  state, add/update/delete, unknown ids, concurrent adds, audio cleanup, traversal guards — so any
+  future adapter (SQLite, Postgres) is verified before it is trusted.
 - **Local engine**: diarization, sentiment classification, coaching card shape, and follow-up replies.
 - **Provider normalization**: a shared post-processing layer that repairs whatever an LLM returns —
   clamping scores, sorting the timeline, forcing exactly three coaching points, dropping blank turns,
@@ -314,7 +317,12 @@ fails the build if the emitted CSS loses its Tailwind utilities.
 │   │   └── upload.ts           # Shared multipart upload type
 │   ├── localAnalyzer.ts        # Zero-key deterministic diarization & coaching engine
 │   ├── localAnalyzer.test.ts
-│   ├── store.ts                # Atomic JSON persistence, write queue, safe audio paths
+│   ├── storage/
+│   │   ├── types.ts            # Store interface: the persistence seam
+│   │   ├── paths.ts            # Data-directory resolution and layout
+│   │   ├── jsonFileStore.ts    # Atomic JSON implementation + queue + cache
+│   │   └── storeContract.test.ts # Interface-level tests every adapter must pass
+│   ├── store.ts                # Instance registry + function facade over Store
 │   └── store.test.ts
 ├── src/
 │   ├── api/client.ts           # Typed API client + ApiError contract

@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-11-26
+
+### Changed
+
+- **Persistence now sits behind a `Store` interface.** Routes call
+  `store.readAll()` / `store.update()` / `store.delete()` / `store.saveAudio()`
+  instead of importing file-shaped helpers, and the audio-path join no longer
+  lives inside the HTTP layer. `JsonFileStore` owns the paths, the mtime cache
+  and the write queue as instance fields; `getStore()` caches one instance per
+  resolved data directory, which is how the "two concurrent PATCHes cannot
+  overwrite each other" guarantee survives the move. The old function exports
+  remain as one-line delegations, so tests and scripts did not need a rewrite.
+
+### Added
+
+- `storeContract.test.ts`: seven interface-level tests every adapter must pass —
+  seed exactly once, `writeAll([])` stays empty across a restart, add/update/
+  delete round-trip, unknown ids return `null`, eight concurrent adds lose
+  nothing, deleting a record removes its audio and leaves no temp files, and
+  traversal attempts are rejected. A SQLite adapter only needs a new
+  `withStore` factory.
+
+### Quality
+
+- 67 unit tests, 11 smoke checks, 13 browser checks. Coverage 92.39% line /
+  83.24% branch / 92.83% function. The refactor is behaviour-neutral: smoke and
+  browser suites pass unchanged.
+
 ## [1.4.0] — 2026-11-26
 
 ### Added

@@ -48,6 +48,9 @@ Every pull request must pass the same checks that CI runs on Node 20, 22, and 24
   `node:test`.
 - **All network access goes through `src/api/client.ts`.** Do not call `fetch` directly
   from components; extend the client and its contract tests instead.
+- **Persistence goes through the `Store` interface** (`server/storage/types.ts`). A new adapter
+  (SQLite, Postgres) must pass `storeContract.test.ts` unchanged; if the contract cannot express
+  your backend, change the interface first and update every implementation.
 - Keep provider SDK calls server-side only. Never expose `GEMINI_API_KEY`,
   `OPENAI_API_KEY`, or any transcript data to client code beyond what the API
   deliberately returns.

@@ -125,15 +125,31 @@ Chrome 跑 13 项检查 —— 首屏渲染、粘贴文本入库并回读 API、
 真实进程 + 临时数据目录跑 11 项 API 契约检查（静态托管、资源可达、健康检查、CRUD 往返、零密钥
 分析链路、JSON 404、路径穿越拒绝、请求 ID 回显）。
 
-## 8. 已知不足与下一步
+## 8. 把持久化收进一个 `Store` 接口
 
-1. ~~`server.ts` 仍然偏大~~ 已在 1.3.0 拆成 `config` / `analysis` / `routes` / `app`，1.3.1 再把路由按端点拆开、把 503 降级收成 `withLocalFallback()`，入口只剩 34 行、最长文件 150 行。下一步是给 `store.ts` 定义正式接口，让 JSON 文件与 SQLite 成为可替换适配器。
+1.4.0 之前，存储的细节是漏的：路由直接 `import { deleteCallRecord, resolveSafeAudioPath }`，音频路径拼接写在 `calls.ts` 里，"temp 文件 + rename" 与写队列写在模块级 `Map` 里。想换 SQLite，得同时改路由、改路径拼接、再猜一遍并发语义。
+
+1.5.0 的处理：
+
+- **定义契约**（`server/storage/types.ts`）：`readAll` / `writeAll` / `add` / `update` / `delete` / `saveAudio` / `resolveAudioPath`。七个方法，没有一个是"读文件"的措辞。
+- **实现搬进类**（`JsonFileStore`）：`paths`、mtime 缓存、写队列都变成实例字段。原来它们是按 `calls.json` 路径做键的模块级 `Map`，现在"一个 dataDir 对应一个实例"表达了同一件事，但缓存与队列的生命周期有了明确归属。
+- **门面保持兼容**（`server/store.ts`）：`getStore(baseDir?)` 是唯一入口，按解析后的 dataDir 缓存实例；旧的 `readAllCalls(dir)` 等函数保留为一行委托，所以既有测试、脚本、路由都不需要同时改。
+- **路由只认接口**：`calls.ts` 与 `analyzeCall.ts` 现在拿的是 `store.readAll()` / `store.update()` / `store.delete()` / `store.saveAudio()` / `store.resolveAudioPath()`。
+- **契约测试**（`storeContract.test.ts`）：7 个用例写在接口上 —— 首次播种只播一次、`writeAll([])` 重启后仍为空、增改删往返、未知 id 返回 `null`、8 路并发 add 不丢记录、删除连带清音频且不留 `.tmp`、路径穿越被拒。将来接 SQLite，只需在 `withStore` 里加一个工厂，跑同一套断言。
+
+一个刻意的取舍：没有为"换存储"先写 SQLite 实现。接口的价值是**让替换成本可度量**，不是先造一个没人用的适配器；契约测试已经把验收标准固定下来了。
+
+结果：67 个单测（+7 契约），覆盖率 92.39% 行 / 83.24% 分支 / 92.83% 函数；11 项 smoke 与 13 项浏览器检查原样通过，证明是零行为变化的重构。
+
+## 9. 已知不足与下一步
+
+1. ~~`server.ts` 仍然偏大~~ 已在 1.3.0 拆成 `config` / `analysis` / `routes` / `app`，1.3.1 再把路由按端点拆开、把 503 降级收成 `withLocalFallback()`，入口只剩 34 行、最长文件 150 行。
 2. ~~没有浏览器级 E2E~~ 已在 1.4.0 补上 `scripts/e2e.mjs`：13 项真实交互检查进 CI 独立 job。仍未覆盖的是像素级视觉回归（有意不做，字体渲染跨机不稳定）与真实 Provider 的联网调用。
-3. 持久化是单进程语义。若要多实例，需要换成 SQLite/Postgres 或对象存储，并保持 `store.ts` 的接口不变。
+3. ~~`store.ts` 没有接口~~ 已在 1.5.0 收成 `Store` + `JsonFileStore` + 契约测试。剩下的仍是**单进程语义**：改成 SQLite/Postgres 现在只需实现接口并通过契约，但"多实例同时写"依然需要数据库层的事务来保证。
 4. 没有流式转写，长音频只能等整段完成；这需要 Provider 侧的流式 API 与前端增量渲染配合。
 5. 没有账号体系与团队多租户；演示场景够用，但不是产品形态。
 
-## 9. 如果重来一次
+## 10. 如果重来一次
 
 - 会先定义 `Store` 接口再写实现，让「JSON 文件」和「SQLite」成为可替换的适配器，而不是把文件语义泄漏到路由层。
 - 会把「Provider 降级」抽成显式的策略对象（`analyzeWithFallback`），而不是在三个分支里各写一次 `if (msg.includes('503'))`。

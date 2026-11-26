@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import type { Express, Request, Response } from 'express';
-import { deleteCallRecord, readAllCalls, resolveSafeAudioPath, updateCallRecord } from '../store';
+import { getStore } from '../store';
 import { resolveAudioMimeType } from '../config';
 import { extractErrorDetails } from '../errors';
 
 /** Persisted call library CRUD plus Range-enabled audio streaming. */
 export function registerCallRoutes(app: Express): void {
+  const store = getStore();
+
   app.get('/api/calls', async (_req: Request, res: Response) => {
     try {
-      const calls = await readAllCalls();
+      const calls = await store.readAll();
       res.json({ calls });
     } catch (err) {
       const { status, message } = extractErrorDetails(err);
@@ -29,7 +31,7 @@ export function registerCallRoutes(app: Express): void {
         coachNoteUpdate?: { turnId: string; note: string };
       };
 
-      const updated = await updateCallRecord(id, (current) => {
+      const updated = await store.update(id, (current) => {
         let nextTranscript = current.transcript;
         const nextSpeakerARole =
           typeof body.speakerARole === 'string' && body.speakerARole.trim()
@@ -97,7 +99,7 @@ export function registerCallRoutes(app: Express): void {
 
   app.delete('/api/calls/:id', async (req: Request, res: Response) => {
     try {
-      const calls = await deleteCallRecord(req.params.id);
+      const calls = await store.delete(req.params.id);
       res.json({ calls });
     } catch (err) {
       const { status, message } = extractErrorDetails(err);
@@ -107,7 +109,7 @@ export function registerCallRoutes(app: Express): void {
 
   // Stream uploaded audio with HTTP Range support
   app.get('/api/audio/:filename', (req: Request, res: Response) => {
-    const filePath = resolveSafeAudioPath(req.params.filename);
+    const filePath = store.resolveAudioPath(req.params.filename);
     if (!filePath || !fs.existsSync(filePath)) {
       res.status(404).json({ error: 'Audio file not found.' });
       return;

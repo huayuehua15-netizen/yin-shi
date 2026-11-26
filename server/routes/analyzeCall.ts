@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { addCallRecord, saveAudioUpload } from '../store';
+import { getStore } from '../store';
 import {
   getProviderCapabilities,
   hasAudioTranscriptionBackend,
@@ -52,6 +52,8 @@ function runAnalysis(
 }
 
 export function registerAnalyzeCallRoute(app: Express, upload: MultipartUpload): void {
+  const store = getStore();
+
   // Full sales call ingestion & coaching intelligence pipeline (Gemini, Ollama/OpenAI, or Zero-Key Local Engine)
   app.post('/api/analyze-call', upload.single('audio'), async (req: Request, res: Response) => {
     try {
@@ -87,7 +89,7 @@ export function registerAnalyzeCallRoute(app: Express, upload: MultipartUpload):
 
       if (req.file) {
         const mimeType = resolveAudioMimeType(req.file.mimetype, req.file.originalname);
-        storedAudioUrl = await saveAudioUpload(callId, req.file.originalname, req.file.buffer);
+        storedAudioUrl = await store.saveAudio(callId, req.file.originalname, req.file.buffer);
         if (!rawTranscript) {
           if (hasValidGeminiKey()) {
             rawTranscript = await transcribeWithGemini(
@@ -175,7 +177,7 @@ export function registerAnalyzeCallRoute(app: Express, upload: MultipartUpload):
         sourceType,
       };
 
-      await addCallRecord(callRecord);
+      await store.add(callRecord);
       res.json({ call: callRecord });
     } catch (err) {
       const { status, message } = extractErrorDetails(err);
